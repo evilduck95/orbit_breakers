@@ -16,7 +16,10 @@ mousePoint = centerPoint = paddlePoint = new Phaser.Point(0, 0);
 //Ball vars.
 var ball;
 var ballSize = 15;
-var ballSpeed = 15;
+var ballSpeed = 200;
+
+var ballVector = new Phaser.Point();
+
 
 //Size difference in a single axis between body and sprite.
 var bodyOffsetSize = 15;
@@ -315,9 +318,8 @@ function initPhysics(){
 	ball.body.setCircle(ballSize / 2);
 
 
-	ball.body.rotatation = Math.round((Math.random() * 4) + 1);
-	ball.body.velocity.x = 10;
-	ball.body.velocity.y = 10;
+	ball.body.velocity.x = -10;
+	ball.body.velocity.y = -10;
 
 	ball.body.damping = 0;
 
@@ -693,10 +695,26 @@ function hitBlock(body1, body2){
 	body2.sprite.alpha = 0.5;
 	//body2.removeFromWorld();
 	body2.static = false;
-	body2.velocity = ball.velocity;
+	body2.kinematic = true;
+
+	body2.clearCollision();
+
+	var blockVelocity = new Phaser.Point(ball.body.velocity.x + game.rnd.integerInRange(-100, 100), ball.body.velocity.y + game.rnd.integerInRange(-100, 100));
+
+	blockVelocity.setMagnitude((ballVector.getMagnitude() * (2 / 3)) * -1);
+
+	body2.velocity.x = blockVelocity.x;
+	body2.velocity.y = blockVelocity.y;
+
+	body2.angularVelocity = game.rnd.integerInRange(-Math.PI, Math.PI);
+
 	sounds.pop.play();
 
+	levels[currentLevel].deactivateBlock(body2.id);
+
 	levels[currentLevel].blockHit();
+
+
 
 	updateBallVelocity();
 
@@ -800,7 +818,6 @@ function buttonSelect(button){
 }
 
 
-//MAIN MENU FUNCTIONS NEED FILLING!!!
 
 /*
 
@@ -872,20 +889,14 @@ function touchControls(lineAngle){
 
 function updateBallVelocity(){
 
-	ball.body.rotation = Math.atan2(ball.body.velocity.x, ball.body.velocity.y);
+	ballVector.set(ball.body.velocity.x, ball.body.velocity.y);
 
-	var x = ball.body.velocity.x, y = ball.body.velocity.y;
+	if(ballVector.getMagnitude() < ballSpeed){
 
+		ballVector.setMagnitude(ballSpeed);
 
-	console.log((Math.pow(x, 2) + Math.pow(y, 2)) < Math.pow(ballSpeed, 2))
-	if((Math.pow(x, 2) + Math.pow(y, 2)),  Math.pow(ballSpeed, 2)){
-
-		console.log("speeding...");
-
-		var angle = Math.atan2(y, x);
-
-		ball.body.velocity.x = -20 * Math.cos(angle) * ballSpeed;
-		ball.body.velocity.y = -20 * Math.sin(angle) * ballSpeed;
+		ball.body.velocity.x = ballVector.x;
+		ball.body.velocity.y = ballVector.y;
 
 	}
 
@@ -985,6 +996,12 @@ var Block = (
 		
 		};
 
+		Block.prototype.setDormant = function(){
+
+			this.blockAlive = false;
+
+		}
+
 		//Returns this blocks position. 
 		Block.prototype.getPos = function(){
 
@@ -996,13 +1013,13 @@ var Block = (
 
 			return this.sprite.body;
 
-		}
+		};
 
 		//Make this block dissapear.
 		Block.prototype.hide = function(){
 
-			//this.sprite.visible = false;
-			//this.sprite.alive = false;
+			this.sprite.visible = false;
+			this.sprite.alive = false;
 
 			this.blockAlive = false;
 
@@ -1226,6 +1243,20 @@ var Level = (
 
 		}
 
+		Level.prototype.deactivateBlock = function(id){
+
+			for(var i = 0; i < this.blocks.length; i++){
+
+				if(this.blocks[i].getBody().id == id){
+
+					this.blocks[i].setDormant();
+
+				}
+
+			}
+
+		}
+
 		Level.prototype.setVisibility = function(visibility, force){
 
 			for(var i = 0; i < this.blocks.length; i++){
@@ -1259,8 +1290,11 @@ var Level = (
 
 			for(var i = 0; i < blocks.length; i++){
 
+				if(blocks[i].isAlive()){
 
-				blocks[i].setPos(zeroPos.x + blockPositions[i].x, zeroPos.y + blockPositions[i].y);
+					blocks[i].setPos(zeroPos.x + blockPositions[i].x, zeroPos.y + blockPositions[i].y);
+
+				}
 
 			}
 

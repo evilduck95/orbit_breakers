@@ -2,8 +2,20 @@
 
 <root>
 	
-	<paddle></paddle>
+	<paddle>
+		<size>
+			<x></x>
+			<y></y>
+		</size>
+	</paddle>
 
-	<ball></ball>
+
+
+	<ball>
+		<size>
+			<x></x>
+			<y></y>
+		</size>
+	</ball>
 
 </root>
