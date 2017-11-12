@@ -1,0 +1,96 @@
+<?xml version="1.0" ?>
+
+<!-- 
+
+	All block positions are relative to a position in the game (top-left corner of level)
+	Positions are defined on a grid using coordinates from [0, 0] to [50, 50]. 
+
+ -->
+
+<root>
+
+	<level id="1" name="2">
+		
+		<block>
+			<color>blue</color>
+			<x>10</x>
+			<y>10</y>
+
+		</block>
+
+	</level>
+
+	<level id="0" name="Introduction">
+
+		<block absolute="false">
+
+			<color>red</color>
+
+			<x>7</x>
+			<y>7</y>
+
+		</block>
+
+		
+
+		<blockLine>
+			
+			<color>green</color>
+
+			<position class="start">
+				<x>7</x>
+				<y>0</y>
+			</position>
+
+			<direction>y</direction>
+			<length>8</length>
+
+		</blockLine>
+
+		<blockLine>
+			
+			<color>green</color>
+			
+			<position class="start">
+				<x>7</x>
+				<y>8</y>
+			</position>
+
+			<direction>y</direction>
+			<length>7</length>
+
+		</blockLine>
+
+		<blockLine>
+			
+			<color>green</color>
+
+			<position class="start">
+				<x>0</x>
+				<y>7</y>
+			</position>
+
+			<direction>x</direction>
+			<length>7</length>
+
+		</blockLine>
+		
+		<blockLine>
+			
+			<color>green</color>
+
+			<position class="start">
+				<x>8</x>
+				<y>7</y>
+			</position>
+
+			<direction>x</direction>
+			<length>7</length>
+
+		</blockLine>
+
+	</level>
+
+	
+
+</root>
