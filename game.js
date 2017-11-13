@@ -5,10 +5,12 @@ var game = new Phaser.Game(window.innerWidth, window.innerHeight, Phaser.CANVAS,
 var aspect = window.availWidth / window.availHeight;
 
 //Player paddle vars.
-var paddle;
+var paddle, secondPaddle;
 var paddleSize = { x: 150, y:24};
+var secondPaddleActive = false;
 //Paddle circle radius.
 var paddleRunRadius = 350;
+
 
 //Points needed to remember.
 var mousePoint, centerPoint, paddlePoint;
@@ -34,6 +36,7 @@ var blockSize = 30;
 var blockCollisionGroup;
 var ballCollisionGroup;
 var paddleCollisionGroup;
+var powerupCollisionGroup;
 
 var levelBuffer = blockSize * 3;
 var levels = new Array();
@@ -43,29 +46,28 @@ var line1, line2, line3, line4;
 
 var blockID = 0;
 
-var mainMenu, optionsMenu;
+var mainMenu, optionsMenu, nextLevelMenu, failScreen;
 
 var menuStages = { main: true, options: false, game: false };
 var buttonGroup;
 
 var sounds;
-
+var soundEnabled = true;
 
 
 var globalDebug = false;
 
 
 function preload() {
-
-	
-
 	
 	game.load.image('paddle', 'assets/paddle(blurred).png');
 	game.load.image('ball', 'assets/ball.png');
 	game.load.image('redblock', 'assets/block(red).png');
 	game.load.image('greenblock', 'assets/block(green).png');
 	game.load.image('blueblock', 'assets/block(blue).png');
+	game.load.image('yellowblock', 'assets/block(yellow).png');
 	game.load.image('button', 'assets/button.png');
+	game.load.image('mutedSpeaker', 'assets/speakeroff.png');
 
 	if(this.game.device.desktop){
 
@@ -85,7 +87,6 @@ function preload() {
 
 	game.load.audio('pop', 'assets/pop.mp3');
 	game.load.audio('beep', 'assets/beep.mp3');
-
 
 }
 
@@ -111,15 +112,19 @@ function create() {
 
 	centerPoint.set(backgroundImage.x, backgroundImage.y);
 
-
+	mutedSpeaker = game.add.sprite(100, 100, 'mutedSpeaker');
+	mutedSpeaker.visible = false;
 
 
 	//Load in paddle asset in center.
 	paddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
-	
+	secondPaddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
+
+	secondPaddle.visible = false;
+
 	//Setup paddle size.
-	paddle.width = paddleSize.x;
-	paddle.height = paddleSize.y;
+	paddle.width = secondPaddle.width = paddleSize.x;
+	paddle.height = secondPaddle.height = paddleSize.y;
 
 
 
@@ -158,41 +163,20 @@ function create() {
 	resizeGame($(window).width, $(window).height, centerPoint, currentLevel);
 
 
-	//MORE SPRITES NEEDED!!!
 
-	mainMenu = {
-
-		title: game.add.text(game.width / 2, 	game.height / 3, "Orbit Breaker", { font: "50px Bauhaus 93", fill: "#4fc" } ),
-
-		playButton: new Button(game.width / 2,		 game.height / 2, 		200, 64, "play"),
-		optionsButton: new Button(game.width / 2,	 game.height * (2 / 3), 200, 64, "options")
+	mainMenu = new Menu("Orbit Breaker");
+	mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
+	mainMenu.addButton(game.width / 2, game.height * (2 / 3), "Options", "options");
 
 
-	};
+	optionsMenu = new Menu("Game Options");
+	optionsMenu.addButton(game.width / 2, game.height / 2, "Sound", "togglesound");
+	optionsMenu.addButton(game.width / 2, game.height * (2 / 3), "Back", "mainmenu");
 
-	mainMenu.title.anchor.setTo(0.5, 0.5);
-
-	mainMenu.playButton.addText("PLAY");
-	mainMenu.optionsButton.addText("OPTIONS");
-
-	optionsMenu = {
-
-		title: game.add.text(game.width / 2, 	game.height / 3, "Game Options", { font: "50px Bauhaus 93", fill: "#4fc" } ),
-
-		toggleSound: new Button(game.width / 2,		game.height / 2, 		200, 64, "togglesound"),
-		mainMenu: new Button(game.width / 2, 		game.height * (2 / 3), 	200, 64, "mainmenu")
-
-	}
-
-	optionsMenu.title.anchor.setTo(0.5, 0.5);
-	optionsMenu.title.visible = false;
+	optionsMenu.setVisibility(false);
 
 
-	optionsMenu.toggleSound.addText("SOUND");
-	optionsMenu.mainMenu.addText("MAIN MENU");
 
-	optionsMenu.toggleSound.toggleVisibility();
-	optionsMenu.mainMenu.toggleVisibility();
 
 	sounds = {
 		pop: game.add.audio('pop'),
@@ -207,8 +191,6 @@ function create() {
 
 	this.spaceKey = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
 
-
-
 }
 
 
@@ -217,6 +199,7 @@ function create() {
 
 
 function update() { 
+
 
 	if(menuStages.main){
 
@@ -308,15 +291,18 @@ function initPhysics(){
 	game.physics.startSystem(Phaser.Physics.P2JS);
 
 	game.physics.p2.setImpactEvents(true);
-	game.physics.p2.enable([paddle, ball], false);
-
-
+	game.physics.p2.enable([paddle, secondPaddle, ball], false);
 
 	paddle.body.setRectangle(paddleSize.x, paddleSize.y, 0, 0, 0);
 	paddle.body.static = true;
 
-	ball.body.setCircle(ballSize / 2);
+	secondPaddle.body.setRectangle(paddleSize.x, paddleSize.y, 0, 0, 0);
+	secondPaddle.body.static = true;
 
+	secondPaddle.body.x = -100;
+	secondPaddle.body.y = -100;
+
+	ball.body.setCircle(ballSize / 2);
 
 	ball.body.velocity.x = -10;
 	ball.body.velocity.y = -10;
@@ -327,15 +313,21 @@ function initPhysics(){
 	game.physics.p2.restitution = 1;
 
 	paddle.physicsBodyType = Phaser.Physics.P2JS;
+	secondPaddle.physicsBodyType = Phaser.Physics.P2JS;
+
 	ball.physicsBodyType = Phaser.Physics.P2JS;
 
 	ballCollisionGroup = game.physics.p2.createCollisionGroup();
 	paddleCollisionGroup = game.physics.p2.createCollisionGroup();
 	blockCollisionGroup = game.physics.p2.createCollisionGroup();
+	powerupCollisionGroup = game.physics.p2.createCollisionGroup();
 
 	paddle.body.setCollisionGroup(paddleCollisionGroup);
+	secondPaddle.body.setCollisionGroup(paddleCollisionGroup);
 
 	paddle.body.collides(ballCollisionGroup);
+	paddle.body.collides(blockCollisionGroup, collectPowerup, this);
+	secondPaddle.body.collides(ballCollisionGroup);
 
 	ball.body.setCollisionGroup(ballCollisionGroup);
 
@@ -691,13 +683,34 @@ function mouseUpEvents(pointer){
 
 function hitBlock(body1, body2){
 
+	var rnd = game.rnd.frac();
+
 	
-	body2.sprite.alpha = 0.5;
-	//body2.removeFromWorld();
+
+	console.log(rnd);
+
+	if(rnd >= 0.90){
+
+		body2.sprite.visible = false;
+		body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
+		game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true);
+
+		body2.setCollisionGroup(powerupCollisionGroup);
+		body2.collides(paddleCollisionGroup);
+
+		console.log("PU Spawn!");
+
+	}
+	else{
+
+		body2.clearCollision();
+		game.add.tween(body2.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
+
+	}
+	
 	body2.static = false;
 	body2.kinematic = true;
 
-	body2.clearCollision();
 
 	var blockVelocity = new Phaser.Point(ball.body.velocity.x + game.rnd.integerInRange(-100, 100), ball.body.velocity.y + game.rnd.integerInRange(-100, 100));
 
@@ -730,6 +743,30 @@ function hitPaddle(body1, body2){
 
 }
 
+function collectPowerup(body1, body2){
+
+	console.log("PU Hit!");
+
+	secondPaddleActive = true;
+	secondPaddle.visible = false;
+
+
+	game.time.events.add(Phaser.Timer.SECOND * 10, removePowerUp, this);
+
+	game.add.tween(body2.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
+	game.add.tween(body2.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
+
+
+}
+
+function removePowerUp(){
+
+	secondPaddleActive = false;
+	secondPaddle.visible = false;
+
+
+}
+
 function removeBody(body){
 
 	//Destroy sprite and body of Block.
@@ -748,11 +785,15 @@ function levelFinished(){
 
 function buttonSelect(button){
 
-	sounds.beep.play();
 
-	button.visible = false;
 
 	switch(button.name){
+
+		case !"togglesound":
+
+			button.visible = false;
+
+		break;
 
 		case "play":
 
@@ -761,9 +802,8 @@ function buttonSelect(button){
 
 			game.paused = false;
 
-			mainMenu.playButton.remove();
-			mainMenu.optionsButton.remove();
-			mainMenu.title.destroy();
+			mainMenu.setVisibility(false);
+
 
 		break;
 
@@ -775,19 +815,19 @@ function buttonSelect(button){
 
 			game.paused = true;
 
-			mainMenu.title.visible = false;
-			mainMenu.playButton.toggleVisibility();
-			mainMenu.optionsButton.toggleVisibility();
+			mainMenu.setVisibility(false);
 
-			optionsMenu.title.visible = true;
-			optionsMenu.toggleSound.toggleVisibility();
-			optionsMenu.mainMenu.toggleVisibility();
+			optionsMenu.setVisibility(true);
 
 		break;
 
 		case "togglesound":
 
 			game.sound.mute ^= true;
+			mutedSpeaker.visible ^= true;
+
+			optionsMenu.setVisibility(true);
+
 
 		break;
 
@@ -799,15 +839,10 @@ function buttonSelect(button){
 
 			game.paused = true;
 
-			optionsMenu.title.visible = false;
+			optionsMenu.setVisibility(false);
 
-			optionsMenu.toggleSound.toggleVisibility();
-			optionsMenu.mainMenu.toggleVisibility();
 
-			mainMenu.title.visible = true;
-
-			mainMenu.playButton.toggleVisibility();
-			mainMenu.optionsButton.toggleVisibility();
+			mainMenu.setVisibility(true);
 
 		break;
 
@@ -825,27 +860,30 @@ function buttonSelect(button){
 
 */
 
-function paddleMove(lineAngle){
+function paddleMove(paddleBody, lineAngle){
 
 	
 	var x = (Math.sin(lineAngle) * paddleRunRadius);
 	//Some trigonometry to work out position from angle and know side (radius of circle).
-	paddle.body.x = (x + (game.width / 2));
-	paddle.body.y = (x / Math.tan(-lineAngle) + (game.height / 2));
+	paddleBody.body.x = (x + (game.width / 2));
+	paddleBody.body.y = (x / Math.tan(-lineAngle) + (game.height / 2));
 
 	//Case of divide by zero when angle == 0, so deal with special case.
 	if(lineAngle == 0){
 
-		paddle.body.x = game.width / 2;
-		paddle.body.y = (game.height / 2) - paddleRunRadius;
+		paddleBody.body.x = game.width / 2;
+		paddleBody.body.y = (game.height / 2) - paddleRunRadius;
 
 
 	}
 
 	//Rotate paddle so it always faces center.
-	paddle.body.rotation = lineAngle;
+	paddleBody.body.rotation = lineAngle;
+
 	
+
 }
+
 
 
 function pcControls(lineAngle){
@@ -854,12 +892,18 @@ function pcControls(lineAngle){
 	if( game.input.activePointer.isDown ){
 
 		paddle.body.rotation = game.physics.arcade.angleBetween(paddle.position, mousePoint) - (Math.PI / 2);
-
+		secondPaddle.body.rotation = game.physics.arcade.angleBetween(secondPaddle.position, mousePoint) - (Math.PI / 2);
 
 	}
 	else{
 
-		paddleMove(lineAngle);
+		paddleMove(paddle, lineAngle);
+
+		if(secondPaddleActive){
+
+			paddleMove(secondPaddle, lineAngle - Math.PI);
+
+		}
 
 	}
 
@@ -874,12 +918,20 @@ function touchControls(lineAngle){
 	if(game.input.pointer1.isDown && game.input.pointer2.isDown){
 
 		paddle.body.rotation = game.physics.arcade.angleBetween(paddle.position, secondPoint) + (Math.PI / 2);
+		secondPaddle.body.rotation = game.physics.arcade.angleBetween(secondPaddle.position, mousePoint) - (Math.PI / 2);
 
 	}
 	else if(game.input.pointer1.isDown && game.input.pointer2.isUp){
 
 
 		paddleMove(lineAngle)
+
+		if(secondPaddleActive){
+
+			paddleMove(secondPaddle, lineAngle - Math.PI);
+
+		}
+
 
 
 	}
@@ -1398,25 +1450,52 @@ Button.prototype.getName = function(){
 
 }
 
-Button.prototype.toggleVisibility = function(){
+Button.prototype.setVisibility = function(visibility){
+
+		this.button.visible = visibility;
+		this.text.visible 	= visibility;
+
+}
+
+Button.prototype.setPos = function(x, y){
+
+	this.button.offsetX = x - 100;
+	this.button.offsetY = y;
 
 
-	if(this.isVisible){
+}
 
-		this.button.visible = false;
-		this.text.visible 	= false;
+function Menu(title){
+
+	this.title = game.add.text(game.width / 2, 	game.height / 3, title, { font: "50px Bauhaus 93", fill: "#4fc" } );
+	this.title.anchor.setTo(0.5, 0.5);
+
+	this.buttonPosDelta = 0;
+
+	this.buttons = new Array();
+
+}
+
+Menu.prototype.addButton = function(x, y, text, id){
+
+	var newButton = new Button(x, y, 200, 64, id);
+	newButton.addText(text);
+
+
+	this.buttons.push(newButton);
+
+
+}
+
+
+Menu.prototype.setVisibility = function(visibility){
+
+	this.title.visible = visibility;
+
+	for(var i = 0; i < this.buttons.length; i++){
+
+		this.buttons[i].setVisibility(visibility);
 
 	}
-	else{
-
-
-
-		this.button.visible ^= true;
-		this.text.visible 	^= true;
-
-	}
-
-	this.isVisible ^= true;
-
 
 }

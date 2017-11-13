@@ -9,16 +9,7 @@
 
 <root>
 
-	<level id="1" name="2">
-		
-		<block>
-			<color>blue</color>
-			<x>10</x>
-			<y>10</y>
-
-		</block>
-
-	</level>
+	
 
 	<level id="0" name="Introduction">
 
@@ -91,6 +82,16 @@
 
 	</level>
 
+	<level id="1" name="Single">
+		
+		<block>
+			<color>blue</color>
+			<x>7</x>
+			<y>7</y>
+
+		</block>
+
+	</level>
 	
 
 </root>
