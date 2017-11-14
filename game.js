@@ -36,7 +36,6 @@ var blockSize = 30;
 var blockCollisionGroup;
 var ballCollisionGroup;
 var paddleCollisionGroup;
-var powerupCollisionGroup;
 
 var levelBuffer = blockSize * 3;
 var levels = new Array();
@@ -320,13 +319,12 @@ function initPhysics(){
 	ballCollisionGroup = game.physics.p2.createCollisionGroup();
 	paddleCollisionGroup = game.physics.p2.createCollisionGroup();
 	blockCollisionGroup = game.physics.p2.createCollisionGroup();
-	powerupCollisionGroup = game.physics.p2.createCollisionGroup();
+	//powerupCollisionGroup = game.physics.p2.createCollisionGroup();
 
 	paddle.body.setCollisionGroup(paddleCollisionGroup);
 	secondPaddle.body.setCollisionGroup(paddleCollisionGroup);
 
-	paddle.body.collides(ballCollisionGroup);
-	paddle.body.collides(blockCollisionGroup, collectPowerup, this);
+	paddle.body.collides([ballCollisionGroup, blockCollisionGroup]);
 	secondPaddle.body.collides(ballCollisionGroup);
 
 	ball.body.setCollisionGroup(ballCollisionGroup);
@@ -577,7 +575,7 @@ function loadBlockLines(xml, level, number){
 
 function resizeGame(x, y, centerPoint, currentLevel) {
 
-	console.log("Resizing...");
+	console.log("Resizing to", $(window).width(), "x", $(window).height());
 
 	game.scale.setGameSize($(window).width(), $(window).height());
 
@@ -671,8 +669,6 @@ function mouseUpEvents(pointer){
 		else{
 
 			flashText("Double Tap to Enter/Exit Fullscreen", game.world.centerX, game.world.centerY);
-			messageTimedOut = false;
-			setTimeout(resetMessage, 5000);
 
 		}
 
@@ -685,33 +681,33 @@ function hitBlock(body1, body2){
 
 	var rnd = game.rnd.frac();
 
+
+	body2.static = false;
+	body2.dynamic = true;
 	
 
-	console.log(rnd);
-
-	if(rnd >= 0.90){
+	//MAKE CHANCE DYNAMIC
+	if(rnd >= 0.85){
 
 		body2.sprite.visible = false;
 		body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
-		game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true);
 
-		body2.setCollisionGroup(powerupCollisionGroup);
-		body2.collides(paddleCollisionGroup);
+		var blockHit = levels[currentLevel].getBlock(body2.id);
+		blockHit.setDormant();
 
-		console.log("PU Spawn!");
+		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true));
+
+		console.log("Powerup Spawned!");
 
 	}
 	else{
 
 		body2.clearCollision();
 		game.add.tween(body2.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
+		levels[currentLevel].deactivateBlock(body2.id);
 
 	}
 	
-	body2.static = false;
-	body2.kinematic = true;
-
-
 	var blockVelocity = new Phaser.Point(ball.body.velocity.x + game.rnd.integerInRange(-100, 100), ball.body.velocity.y + game.rnd.integerInRange(-100, 100));
 
 	blockVelocity.setMagnitude((ballVector.getMagnitude() * (2 / 3)) * -1);
@@ -723,16 +719,11 @@ function hitBlock(body1, body2){
 
 	sounds.pop.play();
 
-	levels[currentLevel].deactivateBlock(body2.id);
-
-	levels[currentLevel].blockHit();
-
-
 
 	updateBallVelocity();
 
-
-	console.log("blocks", levels[currentLevel].numBlocksLeft());
+	levels[currentLevel].blockHit();
+	console.log("Blocks Remaining", levels[currentLevel].numBlocksLeft());
 
 
 }
@@ -745,16 +736,26 @@ function hitPaddle(body1, body2){
 
 function collectPowerup(body1, body2){
 
-	console.log("PU Hit!");
+	console.log("Powerup Collected!");
 
 	secondPaddleActive = true;
-	secondPaddle.visible = false;
+	secondPaddle.visible = true;
+	secondPaddle.alpha = 0;
+
+	game.add.tween(secondPaddle.body.sprite).to({alpha: 1}, 1000, Phaser.Easing.Linear.None, true);
 
 
 	game.time.events.add(Phaser.Timer.SECOND * 10, removePowerUp, this);
 
-	game.add.tween(body2.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
-	game.add.tween(body2.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
+	var blockHit = levels[currentLevel].getBlock(body1.id);
+	blockHit.setDormant();
+
+	game.tweens.remove(blockHit.getTween());
+
+	game.add.tween(body1.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
+	game.add.tween(body1.sprite.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
+
+	levels[currentLevel].deactivateBlock(body1.id);
 
 
 }
@@ -762,7 +763,14 @@ function collectPowerup(body1, body2){
 function removePowerUp(){
 
 	secondPaddleActive = false;
-	secondPaddle.visible = false;
+
+	secondPaddle.alpha = 1;
+
+	game.add.tween(secondPaddle.body.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
+
+
+	//secondPaddle.visible = false;
+
 
 
 }
@@ -782,6 +790,8 @@ function levelFinished(){
 
 
 }
+
+
 
 function buttonSelect(button){
 
@@ -1030,6 +1040,7 @@ var Block = (
 
 			sprite.body.setCollisionGroup(blockCollisionGroup);
 			sprite.body.collides(ballCollisionGroup);
+			sprite.body.collides(paddleCollisionGroup, collectPowerup, this);
 
 
 
@@ -1106,7 +1117,17 @@ var Block = (
 
 		}
 
+		Block.prototype.storeTween = function(tween){
 
+			this.tween = tween;
+
+		}
+
+		Block.prototype.getTween = function(){
+
+			return this.tween;
+
+		}
 
 		return Block;
 
@@ -1295,6 +1316,20 @@ var Level = (
 
 		}
 
+		Level.prototype.getBlock = function(id){
+
+			for(var i = 0; i < this.blocks.length; i++){
+
+				if(this.blocks[i].getBody().id == id){
+
+					return this.blocks[i];
+
+				}
+
+			}
+
+		}
+
 		Level.prototype.deactivateBlock = function(id){
 
 			for(var i = 0; i < this.blocks.length; i++){
@@ -1318,15 +1353,10 @@ var Level = (
 
 					this.blocks[i].show();
 
-					//console.log("shown");
-
-
 				}
 				else{
 
 					this.blocks[i].hide();
-
-					//console.log("hidden");
 
 				}
 
@@ -1334,7 +1364,22 @@ var Level = (
 
 		}
 
+		Level.prototype.checkBlocksInWorld = function(){
 
+			for(var i = 0; i < this.blocks.length; i++){
+
+				if(
+					this.blocks[i].getPos().x < 0 ||
+					this.blocks[i].getPos().x > game.world.width ||
+					this.blocks[i].getPos().y < 0 ||
+					this.blocks[i].getPos().y > game.world.height
+					)
+
+					this.blocks[i].setDormant();
+
+			}
+
+		}
 
 		//Brings all blocks to the Level bounds space.
 		var blocksToBounds = function(blocks, blockPositions, zeroPos, size, checkOutOfBounds){
