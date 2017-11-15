@@ -2,6 +2,9 @@
 
 var game = new Phaser.Game(window.innerWidth, window.innerHeight, Phaser.CANVAS, '', { preload: preload, create: create, update: update, render: render });
 
+var bgMusic = new Audio('assets/music.mp3');
+bgMusic.play();
+
 var aspect = window.availWidth / window.availHeight;
 
 //Player paddle vars.
@@ -73,25 +76,14 @@ function preload() {
 	game.load.image('mutedSpeaker', 'assets/speakeroff.png');
 
 
-	if(this.game.device.desktop){
+	game.load.image('background', 'assets/background(square).png');
 
-		game.load.image('background', 'assets/background(square).png');
-
-
-	}
-	else{
-
-		mobile = true;
-
-		game.load.image('background', 'assets/background(square).png');
-
-
-
-	}
+	mobile = !this.game.device.desktop;
 
 	game.load.audio('pop', 'assets/pop.mp3');
 	game.load.audio('beep', 'assets/beep.mp3');
-	game.load.audio('powerup', 'assets/pwrup.mp3');
+	game.load.audio('powerup', 'assets/pwrup.mp3'),
+	game.load.audio('bgmusic', 'assets/music.mp3')
 
 }
 
@@ -147,8 +139,6 @@ function create() {
 
 	initPhysics();
 
-	///SINGLE CLICK TO HIT BALL???
-
 	if(mobile){
 
 		game.scale.startFullScreen(false);
@@ -197,7 +187,18 @@ function create() {
 
 
 	endGameScreen = new Menu("You have Completed Orbit Breakers!");
-	endGameScreen.addButton(game.width / 2, game.height / 2, "Try Again?", "restart");
+	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
+
+	var textFile;
+
+	jQuery.get('assets/credits.txt', function(data){
+
+		textFile = data;
+		console.log(textFile);
+
+	});
+
+	endGameScreen.addText(textFile, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
 
 	endGameScreen.setVisibility(false);
 
@@ -220,7 +221,8 @@ function create() {
 	sounds = {
 		pop: game.add.audio('pop'),
 		beep: game.add.audio('beep'), 
-		power: game.add.audio('powerup')
+		power: game.add.audio('powerup'),
+		//bgMusic: game.add.audio('bgmusic')
 
 	};
 
@@ -232,13 +234,8 @@ function create() {
 }
 
 
-
-
-
-
-
-
 function update() { 
+
 
 	
 	if(menuStages.main || menuStages.options || menuStages.levelFinish || menuStages.endGame){
@@ -1638,7 +1635,7 @@ var Level = (
 
 			for(var i = 0; (i < blocks.length); i++){
 
-				if(outOfBounds(i, blocks, zeroPos, size)){	
+				if(outOfBounds(i, blocks, zeroPos, size) && blocks[i].isAlive()){	
 
 					console.log("hide");
 
@@ -1733,6 +1730,8 @@ function Menu(title){
 	this.buttonPosDelta = 0;
 
 	this.buttons = new Array();
+	this.texts = new Array();
+
 
 }
 
@@ -1772,5 +1771,21 @@ Menu.prototype.setVisibility = function(visibility){
 		this.buttons[i].setVisibility(visibility);
 
 	}
+
+	for(var i = 0; i < this.texts.length; i++){
+
+		this.texts.visible = visibility;
+
+	}
+
+}
+
+Menu.prototype.addText = function(text, x, y, dx, dy){
+
+	var newText = game.add.text(0, 0, text, { font: "20px Bauhaus 93", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle"});
+	newText.setShadow(3, 3, 'rgba(0, 0, 0, 0.5)', 2);
+	newText.setTextBounds(x, y, dx, dy);
+
+	this.texts.push(newText);
 
 }
