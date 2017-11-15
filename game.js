@@ -219,10 +219,10 @@ function create() {
 
 
 	sounds = {
+		
 		pop: game.add.audio('pop'),
 		beep: game.add.audio('beep'), 
-		power: game.add.audio('powerup'),
-		//bgMusic: game.add.audio('bgmusic')
+		power: game.add.audio('powerup')
 
 	};
 
