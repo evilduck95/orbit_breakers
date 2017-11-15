@@ -55,6 +55,7 @@ var menuStages = { main: true, options: false, game: false, levelFinish: false, 
 var buttonGroup;
 
 var ui;
+var textFile;
 
 var sounds;
 var soundEnabled = true;
@@ -189,7 +190,6 @@ function create() {
 	endGameScreen = new Menu("You have Completed Orbit Breakers!");
 	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
 
-	var textFile;
 
 	jQuery.get('assets/credits.txt', function(data){
 
@@ -198,7 +198,7 @@ function create() {
 
 	});
 
-	endGameScreen.addText(textFile, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
+
 
 	endGameScreen.setVisibility(false);
 
@@ -216,10 +216,8 @@ function create() {
 	ui.lives.anchor.setTo(1, 0);
 	ui.lives.text = lives;
 
-
-
 	sounds = {
-		
+
 		pop: game.add.audio('pop'),
 		beep: game.add.audio('beep'), 
 		power: game.add.audio('powerup')
@@ -238,12 +236,19 @@ function update() {
 
 
 	
-	if(menuStages.main || menuStages.options || menuStages.levelFinish || menuStages.endGame){
+	if(menuStages.main || menuStages.options){
 
 		game.paused = true;
 
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
 		levels[currentLevel].setVisibility(false);
+
+	}
+	else if(menuStages.endGame){
+
+		endGameScreen.setVisibility(true);
+		console.log("text", textFile);
+		endGameScreen.addText(textFile, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
 
 	}
 	else if(menuStages.fail){
@@ -273,7 +278,7 @@ function update() {
 
 		if(levels[currentLevel].numBlocksLeft() <= 0){
 
-			game.paused = true;
+			//game.paused = true;
 			menuStages.game = false;
 
 
@@ -890,7 +895,12 @@ function checkBallOutOfBounds(){
 		ball.body.x < 0 ||
 		ball.body.x > game.width ||
 		ball.body.y < 0 ||
-		ball.body.y > game.height
+		ball.body.y > game.height 
+
+		&&
+
+		!menuStages.endGame &&
+		!menuStages.levelFinish
 
 		){
 
@@ -1772,18 +1782,18 @@ Menu.prototype.setVisibility = function(visibility){
 
 	}
 
-	for(var i = 0; i < this.texts.length; i++){
+	/*for(var i = 0; i < this.texts.length; i++){
 
 		this.texts.visible = visibility;
 
-	}
+	}*/
 
 }
 
 Menu.prototype.addText = function(text, x, y, dx, dy){
 
-	var newText = game.add.text(0, 0, text, { font: "20px Bauhaus 93", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle"});
-	newText.setShadow(3, 3, 'rgba(0, 0, 0, 0.5)', 2);
+	var newText = game.add.text(0, 0, text, { font: "20px Courier New", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle"});
+	//newText.setShadow(1, 1, 'rgba(0, 0, 0, 0.5)', 2);
 	newText.setTextBounds(x, y, dx, dy);
 
 	this.texts.push(newText);
