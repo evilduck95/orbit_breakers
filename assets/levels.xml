@@ -9,7 +9,7 @@
 
 <root>
 
-	<!--level id="2" name="The Box">
+	<level id="2" name="The Box">
 			
 		<blockLine>
 				
@@ -67,7 +67,7 @@
 
 		</blockLine>
 
-	</level-->
+	</level>
 
 	<level id="1" name="A Single Block">
 		
@@ -80,7 +80,7 @@
 
 	</level>
 
-	<!--level id="1" name="Cross">
+	<level id="1" name="Cross">
 
 		<block absolute="false">
 
@@ -149,7 +149,7 @@
 
 		</blockLine>
 
-	</level-->
+	</level>
 
 	
 
