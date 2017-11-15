@@ -11,6 +11,7 @@ var secondPaddleActive = false;
 //Paddle circle radius.
 var paddleRunRadius = 350;
 
+var lives = 1;
 
 //Points needed to remember.
 var mousePoint, centerPoint, paddlePoint;
@@ -45,10 +46,12 @@ var line1, line2, line3, line4;
 
 var blockID = 0;
 
-var mainMenu, optionsMenu, nextLevelMenu, failScreen;
+var mainMenu, optionsMenu, nextLevelMenu, failScreen, endGameScreen;
 
-var menuStages = { main: true, options: false, game: false };
+var menuStages = { main: true, options: false, game: false, levelFinish: false, fail: false, endGame: false };
 var buttonGroup;
+
+var ui;
 
 var sounds;
 var soundEnabled = true;
@@ -66,11 +69,13 @@ function preload() {
 	game.load.image('blueblock', 'assets/block(blue).png');
 	game.load.image('yellowblock', 'assets/block(yellow).png');
 	game.load.image('button', 'assets/button.png');
+	game.load.image('disabledbutton', 'assets/button(inactive).png');
 	game.load.image('mutedSpeaker', 'assets/speakeroff.png');
+
 
 	if(this.game.device.desktop){
 
-		game.load.image('background', 'assets/background.png');
+		game.load.image('background', 'assets/background(square).png');
 
 
 	}
@@ -78,7 +83,7 @@ function preload() {
 
 		mobile = true;
 
-		game.load.image('background', 'assets/background(long).png');
+		game.load.image('background', 'assets/background(square).png');
 
 
 
@@ -86,6 +91,7 @@ function preload() {
 
 	game.load.audio('pop', 'assets/pop.mp3');
 	game.load.audio('beep', 'assets/beep.mp3');
+	game.load.audio('powerup', 'assets/pwrup.mp3');
 
 }
 
@@ -167,6 +173,8 @@ function create() {
 	mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
 	mainMenu.addButton(game.width / 2, game.height * (2 / 3), "Options", "options");
 
+	mainMenu.setVisibility(true);
+
 
 	optionsMenu = new Menu("Game Options");
 	optionsMenu.addButton(game.width / 2, game.height / 2, "Sound", "togglesound");
@@ -175,20 +183,51 @@ function create() {
 	optionsMenu.setVisibility(false);
 
 
+	nextLevelMenu = new Menu("Level Complete!");
+	nextLevelMenu.addButton(game.width / 2, game.height / 2, "Continue", "nextlevel");
+
+	nextLevelMenu.setVisibility(false);
+
+
+	failScreen = new Menu("You have Lost");
+	failScreen.addButton(game.width / 2, game.height / 2, "Try Again", "retry");
+	failScreen.addButton(game.width / 2, game.height * (2 / 3), "Start Over", "restart");
+
+	failScreen.setVisibility(false);
+
+
+	endGameScreen = new Menu("You have Completed Orbit Breakers!");
+	endGameScreen.addButton(game.width / 2, game.height / 2, "Try Again?", "restart");
+
+	endGameScreen.setVisibility(false);
+
+	var textStyle = { font: "30px Bauhaus 93", fill: "#fff"};
+
+	ui = {
+
+		level: game.add.text(10, 10, "n", textStyle), 
+		levelName: game.add.text(100, 10, "level name", textStyle),
+		blocksLeft: game.add.text(10, game.height - 40, "blocks left", textStyle),
+		lives: game.add.text(game.width - 10, 10, "lives", textStyle)
+
+	};
+
+	ui.lives.anchor.setTo(1, 0);
+	ui.lives.text = lives;
+
 
 
 	sounds = {
 		pop: game.add.audio('pop'),
-		beep: game.add.audio('beep')
+		beep: game.add.audio('beep'), 
+		power: game.add.audio('powerup')
 
 	};
 
-	console.log("level num", currentLevel);
 	//Read in Xml values and build levels.
-	initXMLLevel(currentLevel);
+	initXMLLevels();
 
 
-	this.spaceKey = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
 
 }
 
@@ -197,28 +236,62 @@ function create() {
 
 
 
+
+
 function update() { 
 
-
-	if(menuStages.main){
+	
+	if(menuStages.main || menuStages.options || menuStages.levelFinish || menuStages.endGame){
 
 		game.paused = true;
+
+		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
+		levels[currentLevel].setVisibility(false);
 
 	}
-	else if(menuStages.options){
+	else if(menuStages.fail){
 
 		game.paused = true;
+
+		levels[currentLevel].setVisibility(false);
+
+		console.log("Lives Remaining", lives);
+
+		if(lives == 0){
+
+			failScreen.title.text += "\nAnd You're Out of Lives!";
+			failScreen.disableButton("retry");
+
+			
+		}
 
 	}
 	else if(menuStages.game){
 
-		game.paused = false;	
+		
+		ui.levelName.text = levels[currentLevel].getName();
+		ui.level.text = currentLevel;
 
-		if(levels[currentLevel].numBlocksLeft() == 0){
+		game.paused = false;
 
-			currentLevel += 1;
-			levels[currentLevel].setVisibility(true, true);
-			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
+		if(levels[currentLevel].numBlocksLeft() <= 0){
+
+			game.paused = true;
+			menuStages.game = false;
+
+
+			if(typeof levels[currentLevel + 1] == "undefined"){
+
+				menuStages.endGame = true;
+				endGameScreen.setVisibility(true);
+
+			}
+			else{
+
+				menuStages.levelFinish = true;
+				nextLevelMenu.setVisibility(true);
+
+			}
 
 		}
 
@@ -243,12 +316,10 @@ function update() {
 
 		}
 
-		//game.physics.arcade.collide(ball, paddle);
-
 		updateBallVelocity();
+		checkBallOutOfBounds();
+
 	}
-
-
 
 }
 
@@ -334,7 +405,7 @@ function initPhysics(){
 
 }
 
-function initXMLLevel(levelNumber){
+function initXMLLevels(levelNumber){
 
 
 	$(function(){
@@ -352,9 +423,16 @@ function initXMLLevel(levelNumber){
 							var xmlDocument = $.parseXML(xml), $xml = $(xmlDocument);
 
 
-							buildLevels(xml);
+								buildLevels(xml);
+
 
 							for(var i = 0; i < levels.length; i++){
+
+								if(i < levelNumber){
+
+									levels[i].deactivateBlock("all");
+
+								}
 
 								levels[i].setVisibility(false, true);
 
@@ -382,6 +460,9 @@ function buildLevels(xml){
 
 	var blockLines = new Array();
 	var blocks = new Array();
+
+	var searchString = "level";
+
 
 	levels = $(xml).find("level").map(
 
@@ -583,10 +664,9 @@ function resizeGame(x, y, centerPoint, currentLevel) {
 	backgroundImage.x = game.width / 2;
 	backgroundImage.y = game.height / 2;
 
-	if($(window).width() > backgroundImage.width && $(window).height > backgroundImage.height){
+	if($(window).width() > backgroundImage.width && $(window).height() > backgroundImage.height){
 
 		backgroundImage.scale.setTo($(window).width / backgroundImage.width);
-		console.log("scale");
 
 	}
 
@@ -601,6 +681,8 @@ function resizeGame(x, y, centerPoint, currentLevel) {
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
 	}
+
+
 
 }
 
@@ -658,7 +740,7 @@ function mouseUpEvents(pointer){
 
 
 		}
-		else if(doubleClick){
+		else if(doubleClick && !mobile){
 
 
 			game.scale.startFullScreen(false);
@@ -668,7 +750,7 @@ function mouseUpEvents(pointer){
 		}
 		else{
 
-			flashText("Double Tap to Enter/Exit Fullscreen", game.world.centerX, game.world.centerY);
+			flashText("Double Tap to Enter/Exit Fullscreen", game.width / 2, game.height / 2);
 
 		}
 
@@ -678,6 +760,7 @@ function mouseUpEvents(pointer){
 
 
 function hitBlock(body1, body2){
+
 
 	var rnd = game.rnd.frac();
 
@@ -693,6 +776,13 @@ function hitBlock(body1, body2){
 		body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
 
 		var blockHit = levels[currentLevel].getBlock(body2.id);
+
+		if(typeof blockHit == "undefined"){
+
+			return;
+
+		}
+
 		blockHit.setDormant();
 
 		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true));
@@ -725,6 +815,8 @@ function hitBlock(body1, body2){
 	levels[currentLevel].blockHit();
 	console.log("Blocks Remaining", levels[currentLevel].numBlocksLeft());
 
+	ui.blocksLeft.text = levels[currentLevel].numBlocksLeft();
+
 
 }
 
@@ -748,6 +840,13 @@ function collectPowerup(body1, body2){
 	game.time.events.add(Phaser.Timer.SECOND * 10, removePowerUp, this);
 
 	var blockHit = levels[currentLevel].getBlock(body1.id);
+
+	if(typeof blockHit == "undefined"){
+
+		return;
+
+	}
+
 	blockHit.setDormant();
 
 	game.tweens.remove(blockHit.getTween());
@@ -756,6 +855,9 @@ function collectPowerup(body1, body2){
 	game.add.tween(body1.sprite.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
 
 	levels[currentLevel].deactivateBlock(body1.id);
+
+	sounds.power.play();
+
 
 
 }
@@ -775,14 +877,7 @@ function removePowerUp(){
 
 }
 
-function removeBody(body){
 
-	//Destroy sprite and body of Block.
-	body.sprite.destroy();
-	body.removeFromWorld();
-	body.destroy();
-
-}
 
 function levelFinished(){
 
@@ -791,11 +886,39 @@ function levelFinished(){
 
 }
 
+function checkBallOutOfBounds(){
+
+	if(
+
+		ball.body.x < 0 ||
+		ball.body.x > game.width ||
+		ball.body.y < 0 ||
+		ball.body.y > game.height
+
+		){
+
+
+		menuStages.game = false;
+		menuStages.fail = true;
+
+		levels[currentLevel].setVisibility(false);
+		failScreen.setVisibility(true);
+
+		if(lives <= 0){
+
+			failScreen.disableButton("retry");
+
+		}
+
+	}
+
+
+
+}
+
 
 
 function buttonSelect(button){
-
-
 
 	switch(button.name){
 
@@ -814,6 +937,8 @@ function buttonSelect(button){
 
 			mainMenu.setVisibility(false);
 
+			levels[currentLevel].setVisibility(true, true);
+
 
 		break;
 
@@ -826,7 +951,6 @@ function buttonSelect(button){
 			game.paused = true;
 
 			mainMenu.setVisibility(false);
-
 			optionsMenu.setVisibility(true);
 
 		break;
@@ -850,14 +974,64 @@ function buttonSelect(button){
 			game.paused = true;
 
 			optionsMenu.setVisibility(false);
-
-
 			mainMenu.setVisibility(true);
+
+
+		break;
+
+		case "nextlevel":
+
+			menuStages.levelFinish = false;
+			menuStages.game = true;
+
+			nextLevelMenu.setVisibility(false);
+
+			currentLevel++;
+			levels[currentLevel].setVisibility(true, true);
+			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
+
+			ui.level.text = currentLevel;
+			ui.levelName.text = levels[currentLevel].getName();
+
+			resetBall();
+
+			game.paused = false;
+
+		break;
+
+		case "retry":
+
+			console.log("Retry Pressed");
+
+			menuStages.fail = false;
+			menuStages.game = true;
+
+			failScreen.setVisibility(false);
+			levels[currentLevel].setVisibility(true, true);
+			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
+
+			resetBall();
+
+			lives--;
+
+			ui.lives.text = lives;
+
+			game.paused = false;
+
+
+		break;
+
+		case "restart":
+
+			location.reload();
+
 
 		break;
 
 
 	}
+
+	sounds.beep.play();
 
 
 }
@@ -891,6 +1065,16 @@ function paddleMove(paddleBody, lineAngle){
 	paddleBody.body.rotation = lineAngle;
 
 	
+
+}
+
+function resetBall(){
+
+	ball.body.x = game.width * (2 / 3);
+	ball.body.y = game.height * (2 / 3);
+
+	ball.body.velocity.x = 0;
+	ball.body.velocity.y = 0;
 
 }
 
@@ -934,7 +1118,7 @@ function touchControls(lineAngle){
 	else if(game.input.pointer1.isDown && game.input.pointer2.isUp){
 
 
-		paddleMove(lineAngle)
+		paddleMove(paddle, lineAngle)
 
 		if(secondPaddleActive){
 
@@ -953,9 +1137,17 @@ function updateBallVelocity(){
 
 	ballVector.set(ball.body.velocity.x, ball.body.velocity.y);
 
-	if(ballVector.getMagnitude() < ballSpeed){
+	if(ballVector.getMagnitude() == 0){
 
-		ballVector.setMagnitude(ballSpeed);
+		ballVector.set(ball.body.velocity.x + 0.01, ball.body.velocity.y);
+
+
+	}
+
+
+	if(ballVector.getMagnitude() < ballSpeed || ballVector.getMagnitude() == 0){
+
+		ballVector.setMagnitude(ballVector.getMagnitude() + 1);
 
 		ball.body.velocity.x = ballVector.x;
 		ball.body.velocity.y = ballVector.y;
@@ -1236,6 +1428,13 @@ var Level = (
 			this.size = 0;
 			this.blockPositions = new Array();
 			this.blocksLeft = 0;
+			this.alive = true;
+
+		}
+
+		Level.prototype.getName = function(){
+
+			return this.name;
 
 		}
 
@@ -1270,6 +1469,8 @@ var Level = (
 				this.blocks.push(blockObj);
 
 				if(!blockObj.isAbsolute()){
+
+					console.log("Block Added", blockObj.getPos().x, blockObj.getPos().y);
 
 					this.blockPositions.push({ x: blockObj.getPos().x * blockSize, y: blockObj.getPos().y * blockSize });
 
@@ -1332,9 +1533,18 @@ var Level = (
 
 		Level.prototype.deactivateBlock = function(id){
 
+			var allBlocks = false;
+
+			if(id == "all"){
+
+				id = null;
+				allBlocks = true;
+
+			}
+
 			for(var i = 0; i < this.blocks.length; i++){
 
-				if(this.blocks[i].getBody().id == id){
+				if(allBlocks == true || this.blocks[i].getBody().id == id){
 
 					this.blocks[i].setDormant();
 
@@ -1430,14 +1640,12 @@ var Level = (
 
 				if(outOfBounds(i, blocks, zeroPos, size)){	
 
+					console.log("hide");
 
-					blocks[i].kill();
-					blocks.pop(i);
+					blocks[i].hide();
 
 				}
 				else if(blocks[i].isAlive()){
-
-
 
 					blocks[i].show();
 
@@ -1502,6 +1710,13 @@ Button.prototype.setVisibility = function(visibility){
 
 }
 
+Button.prototype.deactivate = function(){
+
+	this.button.inputEnabled = false;
+	this.button.loadTexture('disabledbutton', 0, false);	
+
+}
+
 Button.prototype.setPos = function(x, y){
 
 	this.button.offsetX = x - 100;
@@ -1532,12 +1747,27 @@ Menu.prototype.addButton = function(x, y, text, id){
 
 }
 
+Menu.prototype.disableButton = function(name){
+
+	for(var i = 0; i < this.buttons.length; i++){
+
+		if(this.buttons[i].button.name == name){
+
+			this.buttons[i].deactivate();
+
+		}
+
+	}
+
+
+}
 
 Menu.prototype.setVisibility = function(visibility){
 
 	this.title.visible = visibility;
 
 	for(var i = 0; i < this.buttons.length; i++){
+
 
 		this.buttons[i].setVisibility(visibility);
 

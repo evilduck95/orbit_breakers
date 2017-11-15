@@ -9,9 +9,78 @@
 
 <root>
 
-	
+	<level id="2" name="The Box">
+			
+		<blockLine>
+				
+			<color>blue</color>
 
-	<level id="0" name="Introduction">
+			<position>
+				<x>1</x>
+				<y>1</y>
+			</position>
+
+			<direction>x</direction>
+			<length>14</length>
+
+		</blockLine>
+
+		<blockLine>
+				
+			<color>blue</color>
+
+			<position>
+				<x>14</x>
+				<y>1</y>
+			</position>
+
+			<direction>y</direction>
+			<length>15</length>
+
+		</blockLine>
+
+		<blockLine>
+				
+			<color>blue</color>
+
+			<position>
+				<x>1</x>
+				<y>2</y>
+			</position>
+
+			<direction>y</direction>
+			<length>14</length>
+
+		</blockLine>
+
+		<blockLine>
+				
+			<color>blue</color>
+
+			<position>
+				<x>1</x>
+				<y>15</y>
+			</position>
+
+			<direction>x</direction>
+			<length>14</length>
+
+		</blockLine>
+
+	</level>
+
+	<level id="1" name="A Single Block">
+		
+		<block absolute="false">
+			<color>blue</color>
+			<x>9</x>
+			<y>7</y>
+
+		</block>
+
+	</level>
+
+	<level id="1" name="Cross">
 
 		<block absolute="false">
 
@@ -82,16 +151,9 @@
 
 	</level>
 
-	<level id="1" name="Single">
-		
-		<block>
-			<color>blue</color>
-			<x>7</x>
-			<y>7</y>
+	
 
-		</block>
-
-	</level>
+	
 	
 
 </root>
