@@ -1,0 +1,28 @@
+~ Credits ~
+
+Sprites
+
+Ball
+Paddle
+Blocks
+Background
+Buttons
+Muted Speaker
+
+~ Custom Made Using ~
+~ www.piskelapp.com ~
+
+
+Music
+
+Background
+~ "Sci Fi"- www.bensound.com ~
+
+Ambient and Physics Sounds
+~ www.freesound.org ~
+
+Developed By
+
+~ Keiran Brown - 15000194 ~
+~ Liverpool Hope University ~
+~ 2017 ~

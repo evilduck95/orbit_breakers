@@ -2,8 +2,9 @@
 
 var game = new Phaser.Game(window.innerWidth, window.innerHeight, Phaser.CANVAS, '', { preload: preload, create: create, update: update, render: render });
 
-var bgMusic = new Audio('assets/music.mp3');
-bgMusic.play();
+var bgMusic = new Audio('assets/sound/music.mp3');
+var ambience = new Audio('assets/sound/ambience.mp3');
+var lostSound = new Audio('assets/sound/lost.mp3');
 
 var aspect = window.availWidth / window.availHeight;
 
@@ -14,7 +15,8 @@ var secondPaddleActive = false;
 //Paddle circle radius.
 var paddleRunRadius = 350;
 
-var lives = 1;
+//Track number of player lives.
+var lives = 3;
 
 //Points needed to remember.
 var mousePoint, centerPoint, paddlePoint;
@@ -24,67 +26,87 @@ var ball;
 var ballSize = 15;
 var ballSpeed = 200;
 
+//Tracking for the balls velocity.
 var ballVector = new Phaser.Point();
 
 
 //Size difference in a single axis between body and sprite.
 var bodyOffsetSize = 15;
 
+//Angle between the center of the screen and the mouse position.
 var lineAngle = 0;
 
+//Track whether the browser is running on mobile OS.
 var mobile = false;
-var messageTimedOut = false;
 
+//Track global block size.
 var blockSize = 30;
 
+//Collision groups for optimizing and efficient tracking of collisions.
 var blockCollisionGroup;
 var ballCollisionGroup;
 var paddleCollisionGroup;
 
+//Buffer around levels so paddle can hit 
 var levelBuffer = blockSize * 3;
+
+//Store all game levels and track which level is currently active.
 var levels = new Array();
 var currentLevel = 0;
 
-var line1, line2, line3, line4;
-
-var blockID = 0;
-
+//All game Menus.
 var mainMenu, optionsMenu, nextLevelMenu, failScreen, endGameScreen;
 
+//Array tracking the currently active game stage, different to menus so that gameplay can be tracked also.
 var menuStages = { main: true, options: false, game: false, levelFinish: false, fail: false, endGame: false };
-var buttonGroup;
 
-var ui;
+//Container for UI and storage of Credits from text file.
+var hud;
 var textFile;
 
+//Container for all sounds.
 var sounds;
-var soundEnabled = true;
 
-
+//Allows debug information to be shown.
 var globalDebug = false;
 
 
 function preload() {
 	
-	game.load.image('paddle', 'assets/paddle(blurred).png');
-	game.load.image('ball', 'assets/ball.png');
-	game.load.image('redblock', 'assets/block(red).png');
-	game.load.image('greenblock', 'assets/block(green).png');
-	game.load.image('blueblock', 'assets/block(blue).png');
-	game.load.image('yellowblock', 'assets/block(yellow).png');
-	game.load.image('button', 'assets/button.png');
-	game.load.image('disabledbutton', 'assets/button(inactive).png');
-	game.load.image('mutedSpeaker', 'assets/speakeroff.png');
+	/*
+		Load in all visual assets.
+	*/
 
+	//Player paddle and ball.
+	game.load.image('paddle', 'assets/visual/paddle(blurred).png');
+	game.load.image('ball', 'assets/visual/ball.png');
 
-	game.load.image('background', 'assets/background(square).png');
+	//Blocks for targets and power ups.
+	game.load.image('redblock', 'assets/visual/block(red).png');
+	game.load.image('greenblock', 'assets/visual/block(green).png');
+	game.load.image('blueblock', 'assets/visual/block(blue).png');
+	game.load.image('yellowblock', 'assets/visual/block(yellow).png');
 
+	//Buttons.
+	game.load.image('button', 'assets/visual/button.png');
+	game.load.image('disabledbutton', 'assets/visual/button(inactive).png');
+
+	//Muted speaker icon indicating whether game is muted.
+	game.load.image('mutedSpeaker', 'assets/visual/speakeroff.png');
+
+	//Background.
+	game.load.image('background', 'assets/visual/background(square,space).png');
+
+	//Set mobile bool to not desktop.
 	mobile = !this.game.device.desktop;
 
-	game.load.audio('pop', 'assets/pop.mp3');
-	game.load.audio('beep', 'assets/beep.mp3');
-	game.load.audio('powerup', 'assets/pwrup.mp3'),
-	game.load.audio('bgmusic', 'assets/music.mp3')
+	//Audio for physics.
+	game.load.audio('pop', 'assets/sound/pop.mp3');
+	game.load.audio('beep', 'assets/sound/beep.mp3');
+	game.load.audio('powerup', 'assets/sound/pwrup.mp3');
+	game.load.audio('lost', 'assets/sound/lost.mp3');
+
+
 
 }
 
@@ -92,6 +114,9 @@ function preload() {
 
 function create() {
 
+	ambience.play();
+	bgMusic.volume = 0.25;
+	lostSound.volume = 0.25;
 
 	//Setup reference points, center, mouse and paddle.
 	centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
@@ -101,20 +126,15 @@ function create() {
 
 
 
-	//Add a background image.
+	//Add a background image, anchor from center.
 	backgroundImage = game.add.sprite(0, 0, 'background');
-	var imageAspect = 16/9;
-
 	backgroundImage.anchor.setTo(0.5, 0.5);
 
-
+	//Get the center point of the screen.
 	centerPoint.set(backgroundImage.x, backgroundImage.y);
 
-	mutedSpeaker = game.add.sprite(100, 100, 'mutedSpeaker');
-	mutedSpeaker.visible = false;
 
-
-	//Load in paddle asset in center.
+	//Load in paddle asset in center, also load in second paddle.
 	paddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
 	secondPaddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
 
@@ -129,6 +149,7 @@ function create() {
 	//Load in ball asset at center.
 	ball = game.add.sprite(game.width * 0.9, game.height * 0.9, 'ball');
 
+	//Set ball to global size.
 	ball.width = ball.height= ballSize;
 
 
@@ -140,13 +161,14 @@ function create() {
 
 	initPhysics();
 
+	//Add extra pointer for mobile users to use double touch.
 	if(mobile){
 
-		game.scale.startFullScreen(false);
 		game.input.addPointer();
 
 	}
 
+	//Add mouse events to game on mouse up.
 	game.input.onUp.add(function(pointer){ mouseUpEvents(pointer); }, this);
 
 	game.paused = true;
@@ -159,52 +181,14 @@ function create() {
 	resizeGame($(window).width, $(window).height, centerPoint, currentLevel);
 
 
+	//Create all menus and add to game.
+	createMenus();
 
-	mainMenu = new Menu("Orbit Breaker");
-	mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
-	mainMenu.addButton(game.width / 2, game.height * (2 / 3), "Options", "options");
-
-	mainMenu.setVisibility(true);
-
-
-	optionsMenu = new Menu("Game Options");
-	optionsMenu.addButton(game.width / 2, game.height / 2, "Sound", "togglesound");
-	optionsMenu.addButton(game.width / 2, game.height * (2 / 3), "Back", "mainmenu");
-
-	optionsMenu.setVisibility(false);
-
-
-	nextLevelMenu = new Menu("Level Complete!");
-	nextLevelMenu.addButton(game.width / 2, game.height / 2, "Continue", "nextlevel");
-
-	nextLevelMenu.setVisibility(false);
-
-
-	failScreen = new Menu("You have Lost");
-	failScreen.addButton(game.width / 2, game.height / 2, "Try Again", "retry");
-	failScreen.addButton(game.width / 2, game.height * (2 / 3), "Start Over", "restart");
-
-	failScreen.setVisibility(false);
-
-
-	endGameScreen = new Menu("You have Completed Orbit Breakers!");
-	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
-
-
-	jQuery.get('assets/credits.txt', function(data){
-
-		textFile = data;
-		console.log(textFile);
-
-	});
-
-
-
-	endGameScreen.setVisibility(false);
-
+	//Default text style.
 	var textStyle = { font: "30px Bauhaus 93", fill: "#fff"};
 
-	ui = {
+	//Setup HUD.
+	hud = {
 
 		level: game.add.text(10, 10, "n", textStyle), 
 		levelName: game.add.text(100, 10, "level name", textStyle),
@@ -213,16 +197,22 @@ function create() {
 
 	};
 
-	ui.lives.anchor.setTo(1, 0);
-	ui.lives.text = lives;
+	hud.lives.anchor.setTo(1, 0);
+	hud.lives.text = lives;
 
 	sounds = {
 
 		pop: game.add.audio('pop'),
 		beep: game.add.audio('beep'), 
-		power: game.add.audio('powerup')
+		power: game.add.audio('powerup'),
+		lost: game.add.audio('lost')
 
 	};
+
+
+	//Add muted speaker to game but don't show yet.
+	mutedSpeaker = game.add.sprite(100, 100, 'mutedSpeaker');
+	mutedSpeaker.visible = false;
 
 	//Read in Xml values and build levels.
 	initXMLLevels();
@@ -231,13 +221,60 @@ function create() {
 
 }
 
+function createMenus(){
+
+	//Create main menu for start of game.
+	mainMenu = new Menu("Orbit Breaker");
+	mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
+	mainMenu.addButton(game.width / 2, game.height * (2 / 3), "Options", "options");
+
+	mainMenu.setVisibility(true);
+
+	//Create options menu for settings manipulation.
+	optionsMenu = new Menu("Game Options");
+	optionsMenu.addButton(game.width / 2, game.height / 2, "Sound", "togglesound");
+	optionsMenu.addButton(game.width / 2, game.height * (2 / 3), "Back", "mainmenu");
+
+	optionsMenu.setVisibility(false);
+
+	//Next level menu for ending of levels.
+	nextLevelMenu = new Menu("Level Complete!");
+	nextLevelMenu.addButton(game.width / 2, game.height / 2, "Continue", "nextlevel");
+
+	nextLevelMenu.setVisibility(false);
+
+	//Screen to show if player fails.
+	failScreen = new Menu("You have Lost");
+	failScreen.addButton(game.width / 2, game.height / 2, "Try Again", "retry");
+	failScreen.addButton(game.width / 2, game.height * (2 / 3), "Start Over", "restart");
+
+	failScreen.setVisibility(false);
+
+	//Screen for end of game.
+	endGameScreen = new Menu("You have Completed Orbit Breakers!");
+	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
+
+	//Query credits file.
+	jQuery.get('data/credits.txt', function(data){
+
+		textFile = data;
+		console.log(textFile);
+
+	});
+
+	endGameScreen.setVisibility(false);
+
+}
+
 
 function update() { 
 
 
-	
+
+	//Change function of update based on games current stage.
 	if(menuStages.main || menuStages.options){
 
+		//Pause and hide level so buttons can be seen.
 		game.paused = true;
 
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
@@ -246,6 +283,7 @@ function update() {
 	}
 	else if(menuStages.endGame){
 
+		//Show end screen and add credits to menu.
 		endGameScreen.setVisibility(true);
 		console.log("text", textFile);
 		endGameScreen.addText(textFile, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
@@ -253,12 +291,13 @@ function update() {
 	}
 	else if(menuStages.fail){
 
+		//Game failed, disable current level and pause game.
 		game.paused = true;
-
 		levels[currentLevel].setVisibility(false);
 
 		console.log("Lives Remaining", lives);
 
+		//If no lives are left, player may not retry.
 		if(lives == 0){
 
 			failScreen.title.text += "\nAnd You're Out of Lives!";
@@ -270,43 +309,26 @@ function update() {
 	}
 	else if(menuStages.game){
 
-		
-		ui.levelName.text = levels[currentLevel].getName();
-		ui.level.text = currentLevel;
-
-		game.paused = false;
-
-		if(levels[currentLevel].numBlocksLeft() <= 0){
-
-			//game.paused = true;
-			menuStages.game = false;
-
-
-			if(typeof levels[currentLevel + 1] == "undefined"){
-
-				menuStages.endGame = true;
-				endGameScreen.setVisibility(true);
-
-			}
-			else{
-
-				menuStages.levelFinish = true;
-				nextLevelMenu.setVisibility(true);
-
-			}
+		if(!game.sound.mute){
+			
+			bgMusic.play();
 
 		}
 
+		//Update HUD on every frame.
+		hud.levelName.text = levels[currentLevel].getName();
+		hud.level.text = currentLevel;
 
+		//Check for the current levels completion.
+		checkLevelCompletion();
 
-		centerPoint.set(backgroundImage.x, backgroundImage.y);
+		//Update necessary references in space for game function (e.g. center point).
+		setReferenceParameters();
 
-		//Collect mouse co-ordinates into a point.
-		mousePoint.set(game.input.x, game.input.y);
-
-		//Get angle between the center and the mouse, account for offset.
-		lineAngle = game.physics.arcade.angleBetween(centerPoint, mousePoint) + (Math.PI / 2);
-
+		//Ensure game is not paused!
+		game.paused = false;
+		
+		//Choose control function based on running OS type.
 		if(mobile){
 
 			touchControls(lineAngle);
@@ -318,7 +340,10 @@ function update() {
 
 		}
 
+		//Ensure ball travels at correct speed and slowly speeds up in the beginning.
 		updateBallVelocity();
+
+		//Check if the ball goes out of bounds for failure condition.
 		checkBallOutOfBounds();
 
 	}
@@ -326,17 +351,11 @@ function update() {
 }
 
 
-
-
-
 function render(){
 
 	if(globalDebug){
 
-		game.debug.geom(line1);
-		game.debug.geom(line2);
-		game.debug.geom(line3);
-		game.debug.geom(line4);
+		
 
 	}
 
@@ -417,7 +436,7 @@ function initXMLLevels(levelNumber){
 					{
 
 						type: "GET",
-						url: "assets/levels.xml",
+						url: "data/levels.xml",
 						dataType: "xml",
 
 						success: function(xml){
@@ -768,24 +787,26 @@ function hitBlock(body1, body2){
 
 
 	body2.static = false;
-	body2.dynamic = true;
+
+	var blockHit = levels[currentLevel].getBlock(body2.id);
+
+	if(typeof blockHit == "undefined"){
+
+		return;
+
+	}
+
+	blockHit.setDormant();
 	
 
 	//MAKE CHANCE DYNAMIC
 	if(rnd >= 0.85){
 
+
+		body2.dynamic = true;
+
 		body2.sprite.visible = false;
 		body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
-
-		var blockHit = levels[currentLevel].getBlock(body2.id);
-
-		if(typeof blockHit == "undefined"){
-
-			return;
-
-		}
-
-		blockHit.setDormant();
 
 		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true));
 
@@ -794,9 +815,9 @@ function hitBlock(body1, body2){
 	}
 	else{
 
+		body2.kinematic = true;
 		body2.clearCollision();
 		game.add.tween(body2.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
-		levels[currentLevel].deactivateBlock(body2.id);
 
 	}
 	
@@ -817,7 +838,7 @@ function hitBlock(body1, body2){
 	levels[currentLevel].blockHit();
 	console.log("Blocks Remaining", levels[currentLevel].numBlocksLeft());
 
-	ui.blocksLeft.text = levels[currentLevel].numBlocksLeft();
+	hud.blocksLeft.text = levels[currentLevel].numBlocksLeft();
 
 
 }
@@ -904,12 +925,14 @@ function checkBallOutOfBounds(){
 
 		){
 
+		lostSound.play();
 
 		menuStages.game = false;
 		menuStages.fail = true;
 
 		levels[currentLevel].setVisibility(false);
 		failScreen.setVisibility(true);
+
 
 		if(lives <= 0){
 
@@ -963,9 +986,27 @@ function buttonSelect(button){
 		break;
 
 		case "togglesound":
+			
+			console.log(game.sound.mute);
 
-			game.sound.mute ^= true;
-			mutedSpeaker.visible ^= true;
+			if(game.sound.mute){
+
+				bgMusic.play();
+				ambience.play();
+
+				game.sound.mute = false;
+				mutedSpeaker.visible = false;
+
+			}
+			else{
+
+				bgMusic.pause();
+				ambience.pause();
+				game.sound.mute = true;
+				mutedSpeaker.visible = true;
+
+			}
+
 
 			optionsMenu.setVisibility(true);
 
@@ -997,8 +1038,8 @@ function buttonSelect(button){
 			levels[currentLevel].setVisibility(true, true);
 			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
-			ui.level.text = currentLevel;
-			ui.levelName.text = levels[currentLevel].getName();
+			hud.level.text = currentLevel;
+			hud.levelName.text = levels[currentLevel].getName();
 
 			resetBall();
 
@@ -1021,7 +1062,7 @@ function buttonSelect(button){
 
 			lives--;
 
-			ui.lives.text = lives;
+			hud.lives.text = lives;
 
 			game.paused = false;
 
@@ -1043,6 +1084,31 @@ function buttonSelect(button){
 
 }
 
+function checkLevelCompletion(){
+
+	//Check for whether the current level is finished.
+	if(levels[currentLevel].numBlocksLeft() <= 0){
+
+		//game.paused = true;
+		menuStages.game = false;
+
+		//If there are no levels left, show end game screen, otherwise show level finish menu.
+		if(typeof levels[currentLevel + 1] == "undefined"){
+
+			menuStages.endGame = true;
+			endGameScreen.setVisibility(true);
+
+		}
+		else{
+
+			menuStages.levelFinish = true;
+			nextLevelMenu.setVisibility(true);
+
+		}
+
+	}
+
+}
 
 
 /*
@@ -1140,6 +1206,18 @@ function touchControls(lineAngle){
 
 }
 
+function setReferenceParameters(){
+
+	centerPoint.set(backgroundImage.x, backgroundImage.y);
+
+	//Collect mouse co-ordinates into a point.
+	mousePoint.set(game.input.x, game.input.y);
+
+	//Get angle between the center and the mouse, account for offset.
+	lineAngle = game.physics.arcade.angleBetween(centerPoint, mousePoint) + (Math.PI / 2);
+
+}
+
 function updateBallVelocity(){
 
 	ballVector.set(ball.body.velocity.x, ball.body.velocity.y);
@@ -1228,6 +1306,8 @@ var Block = (
 		var initBlockPhysics = function(sprite){
 
 			game.physics.p2.enable(sprite);
+
+			sprite.body.allowSleep = true;
 			
 			sprite.body.setRectangle(sprite.width, sprite.height, 0, 0, 0);
 			sprite.body.x = this.x;
@@ -1261,6 +1341,7 @@ var Block = (
 		Block.prototype.setDormant = function(){
 
 			this.blockAlive = false;
+			this.sprite.body.sleepMode = p2.World.BODY_SLEEPING;
 
 		}
 
@@ -1285,6 +1366,8 @@ var Block = (
 
 			this.blockAlive = false;
 
+			this.sprite.body.removeFromWorld();
+
 		};
 
 		//Make this block appear.
@@ -1294,6 +1377,7 @@ var Block = (
 			this.sprite.alive = true;
 
 			this.blockAlive = true;
+			this.sprite.body.addToWorld();
 
 		};
 
