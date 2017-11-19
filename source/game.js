@@ -55,14 +55,15 @@ var levels = new Array();
 var currentLevel = 0;
 
 //All game Menus.
-var mainMenu, optionsMenu, nextLevelMenu, failScreen, endGameScreen;
+var mainMenu, optionsMenu, nextLevelMenu, failScreen, endGameScreen, tutorialScreen;
 
 //Array tracking the currently active game stage, different to menus so that gameplay can be tracked also.
-var menuStages = { main: true, options: false, game: false, levelFinish: false, fail: false, endGame: false };
+var menuStages = { main: true, options: false, game: false, levelFinish: false, fail: false, endGame: false, tutorial: false };
 
 //Container for UI and storage of Credits from text file.
 var hud;
-var textFile;
+var creditText, tutorialText;
+var fullscreenText;
 
 //Container for all sounds.
 var sounds;
@@ -218,6 +219,15 @@ function create() {
 	initXMLLevels();
 
 
+	fullscreenText = game.add.text(game.width / 2, game.height / 2, "Double Click to go Fullscreen", {font: "30px Arial", fill: "#FFFFFF"});
+	fullscreenText.anchor.set(0.5);
+	fullscreenText.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
+	fullscreenText.alpha = 0;
+
+	//Make everything dissapear until the game starts.
+	paddle.visible = false;
+	ball.visible = false;
+
 
 }
 
@@ -226,7 +236,8 @@ function createMenus(){
 	//Create main menu for start of game.
 	mainMenu = new Menu("Orbit Breaker");
 	mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
-	mainMenu.addButton(game.width / 2, game.height * (2 / 3), "Options", "options");
+	mainMenu.addButton(game.width / 3, game.height * (2 / 3), "Options", "options");
+	mainMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "How to Play", "tutorial");
 
 	mainMenu.setVisibility(true);
 
@@ -254,13 +265,24 @@ function createMenus(){
 	endGameScreen = new Menu("You have Completed Orbit Breakers!");
 	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
 
+	tutorialScreen = new Menu("How to Play");
+	tutorialScreen.addButton(game.width / 2, game.height - 200, "Back", "mainmenu");
+
+	tutorialScreen.setVisibility(false);
+
+
 	//Query credits file.
 	jQuery.get('data/credits.txt', function(data){
 
-		textFile = data;
-		console.log(textFile);
+		creditText = data;
 
 	});
+
+	jQuery.get('data/tutorial.txt', function(data){
+
+		tutorialText = data;
+
+	})
 
 	endGameScreen.setVisibility(false);
 
@@ -272,13 +294,14 @@ function update() {
 
 
 	//Change function of update based on games current stage.
-	if(menuStages.main || menuStages.options){
+	if(menuStages.main || menuStages.options || menuStages.tutorial){
 
 		//Pause and hide level so buttons can be seen.
 		game.paused = true;
 
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
 		levels[currentLevel].setVisibility(false);
+			
 
 	}
 	else if(menuStages.endGame){
@@ -287,6 +310,7 @@ function update() {
 		endGameScreen.setVisibility(true);
 		console.log("text", textFile);
 		endGameScreen.addText(textFile, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
+
 
 	}
 	else if(menuStages.fail){
@@ -691,13 +715,13 @@ function resizeGame(x, y, centerPoint, currentLevel) {
 
 	}
 
-	if(typeof centerPoint != "undefined"){
+	if(typeof centerPoint != "undefined" && menuStages.game){
 
 		centerPoint.setTo(game.width / 2, game.height / 2);
 
 	}
 
-	if(typeof levels[currentLevel] != "undefined"){
+	if(typeof levels[currentLevel] != "undefined" && menuStages.game){
 
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
@@ -715,14 +739,12 @@ function resizeGame(x, y, centerPoint, currentLevel) {
 
 function flashText(text, x, y){
 
-	game.time.events.add(2000, function(){
+	game.time.events.add(500, function(){
 
-				var textStyle = {font: "30px Arial", fill: "#FFFFFF"};
-				var text = game.add.text(x, y, text, textStyle);
-				text.anchor.set(0.5);
-				text.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
-				game.add.tween(text).to({y: 0}, 1500, Phaser.Easing.Linear.None, true);
-				game.add.tween(text).to({alpha: 0}, 1500, Phaser.Easing.Linear.None, true);
+				fullscreenText.alpha = 1;	
+				fullscreenText.y = 0			
+				game.add.tween(fullscreenText).to({y: game.height / 2}, 1500, Phaser.Easing.Linear.None, true);
+				game.add.tween(fullscreenText).to({alpha: 0}, 1500, Phaser.Easing.Linear.None, true);
 
 
 			}, this);
@@ -741,7 +763,7 @@ function mouseUpEvents(pointer){
 
 		var doubleClick = (pointer.msSinceLastClick < game.input.doubleTapRate);
 
-		if(!game.scale.isFullScreen && !mobile){
+		if(!game.scale.isFullScreen && !mobile && menuStages.game){
 
 
 			resizeGame(window.innerWidth, window.innerHeight, centerPoint, currentLevel);
@@ -769,12 +791,11 @@ function mouseUpEvents(pointer){
 
 
 		}
-		else{
+		else if(!doubleClick && pointer.msSinceLastClick < game.input.doubleTapRate * 2){
 
 			flashText("Double Tap to Enter/Exit Fullscreen", game.width / 2, game.height / 2);
 
 		}
-
 
 }
 
@@ -961,6 +982,7 @@ function buttonSelect(button){
 		case "play":
 
 			menuStages.main = false;
+			menuStages.tutorial = false;
 			menuStages.game = true;
 
 			game.paused = false;
@@ -968,6 +990,10 @@ function buttonSelect(button){
 			mainMenu.setVisibility(false);
 
 			levels[currentLevel].setVisibility(true, true);
+			paddle.visible = true;
+			ball.visible = true;
+
+			resizeGame()
 
 
 		break;
@@ -985,6 +1011,25 @@ function buttonSelect(button){
 
 		break;
 
+		case "tutorial":
+
+			menuStages.main = false;
+			menuStages.tutorial = true;
+
+			game.paused = true;
+
+			var widthBuffer = game.width * 0.2;
+			var heightBuffer = game.height * 0.3;
+
+			tutorialScreen.addText(tutorialText, widthBuffer, heightBuffer, game.width - (widthBuffer * 2), game.height - (heightBuffer * 2));
+
+			mainMenu.setVisibility(false);
+			tutorialScreen.setVisibility(true);
+
+
+
+		break;
+
 		case "togglesound":
 			
 			console.log(game.sound.mute);
@@ -993,6 +1038,7 @@ function buttonSelect(button){
 
 				bgMusic.play();
 				ambience.play();
+				lostSound.volume = 1;
 
 				game.sound.mute = false;
 				mutedSpeaker.visible = false;
@@ -1002,6 +1048,8 @@ function buttonSelect(button){
 
 				bgMusic.pause();
 				ambience.pause();
+				lostSound.volume = 0;
+
 				game.sound.mute = true;
 				mutedSpeaker.visible = true;
 
@@ -1022,6 +1070,7 @@ function buttonSelect(button){
 			game.paused = true;
 
 			optionsMenu.setVisibility(false);
+			tutorialScreen.setVisibility(false);
 			mainMenu.setVisibility(true);
 
 
@@ -1080,6 +1129,9 @@ function buttonSelect(button){
 	}
 
 	sounds.beep.play();
+
+	resizeGame(window.screen.width, window.screen.height, centerPoint, currentLevel);
+
 
 
 }
@@ -1866,11 +1918,11 @@ Menu.prototype.setVisibility = function(visibility){
 
 	}
 
-	/*for(var i = 0; i < this.texts.length; i++){
+	for(var i = 0; i < this.texts.length; i++){
 
-		this.texts.visible = visibility;
+		this.texts[i].visible = visibility;
 
-	}*/
+	}
 
 }
 

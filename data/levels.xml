@@ -13,7 +13,7 @@
 			
 		<blockLine>
 				
-			<color>blue</color>
+			<color>green</color>
 
 			<position>
 				<x>1</x>
@@ -21,7 +21,7 @@
 			</position>
 
 			<direction>x</direction>
-			<length>14</length>
+			<length>12</length>
 
 		</blockLine>
 
@@ -30,12 +30,12 @@
 			<color>blue</color>
 
 			<position>
-				<x>14</x>
-				<y>1</y>
+				<x>12</x>
+				<y>2</y>
 			</position>
 
 			<direction>y</direction>
-			<length>15</length>
+			<length>11</length>
 
 		</blockLine>
 
@@ -49,21 +49,21 @@
 			</position>
 
 			<direction>y</direction>
-			<length>14</length>
+			<length>11</length>
 
 		</blockLine>
 
 		<blockLine>
 				
-			<color>blue</color>
+			<color>green</color>
 
 			<position>
 				<x>1</x>
-				<y>15</y>
+				<y>12</y>
 			</position>
 
 			<direction>x</direction>
-			<length>14</length>
+			<length>12</length>
 
 		</blockLine>
 
