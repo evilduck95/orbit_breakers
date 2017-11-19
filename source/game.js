@@ -930,7 +930,7 @@ function removePowerUp(){
 function levelFinished(){
 
 	currentLevel++;
-
+	resetBall();
 
 }
 
