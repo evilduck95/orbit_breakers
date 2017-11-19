@@ -198,6 +198,11 @@ function create() {
 
 	};
 
+	hud.level.visible = false;
+	hud.levelName.visible = false;
+	hud.blocksLeft.visible = false;
+	hud.lives.visible = false;
+
 	hud.lives.anchor.setTo(1, 0);
 	hud.lives.text = lives;
 
@@ -483,7 +488,6 @@ function initXMLLevels(levelNumber){
 
 							}
 
-							levels[currentLevel].setVisibility(true, true);
 
 
 						}
@@ -980,6 +984,12 @@ function buttonSelect(button){
 		break;
 
 		case "play":
+
+			//Make HUD visible.
+			hud.level.visible = true;
+			hud.levelName.visible = true;
+			hud.blocksLeft.visible = true;
+			hud.lives.visible = true;
 
 			menuStages.main = false;
 			menuStages.tutorial = false;
