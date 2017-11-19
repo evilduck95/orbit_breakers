@@ -79,7 +79,7 @@ function preload() {
 	*/
 
 	//Player paddle and ball.
-	game.load.image('paddle', 'assets/visual/paddle(blurred).png');
+	game.load.image('paddle', 'assets/visual/paddle(sprite).png');
 	game.load.image('ball', 'assets/visual/ball.png');
 
 	//Blocks for targets and power ups.
