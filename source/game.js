@@ -63,7 +63,7 @@ var menuStages = { main: true, options: false, game: false, levelFinish: false, 
 //Container for UI and storage of Credits from text file.
 var hud;
 var creditText, tutorialText;
-var fullscreenText;
+var fullscreenText, pauseText;
 
 //Container for all sounds.
 var sounds;
@@ -106,8 +106,6 @@ function preload() {
 	game.load.audio('beep', 'assets/sound/beep.mp3');
 	game.load.audio('powerup', 'assets/sound/pwrup.mp3');
 	game.load.audio('lost', 'assets/sound/lost.mp3');
-
-
 
 }
 
@@ -224,19 +222,24 @@ function create() {
 	initXMLLevels();
 
 
-	fullscreenText = game.add.text(game.width / 2, game.height / 2, "Double Click to go Fullscreen", {font: "30px Arial", fill: "#FFFFFF"});
+	fullscreenText = game.add.text(game.width / 2, game.height / 2, "Double Click to go Fullscreen", textStyle);
 	fullscreenText.anchor.set(0.5);
 	fullscreenText.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
 	fullscreenText.alpha = 0;
+
+	pauseText = game.add.text(game.width / 2, game.height / 2, "Paused", textStyle);
+	pauseText.anchor.set(0.5, 0.5);
+	pauseText.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
+	pauseText.alpha = 0;
+
 
 	//Make everything dissapear until the game starts.
 	paddle.visible = false;
 	ball.visible = false;
 
-
 }
 
-function createMenus(){
+function createMenus() {
 
 	//Create main menu for start of game.
 	mainMenu = new Menu("Orbit Breaker");
@@ -313,8 +316,8 @@ function update() {
 
 		//Show end screen and add credits to menu.
 		endGameScreen.setVisibility(true);
-		console.log("text", textFile);
-		endGameScreen.addText(textFile, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
+		console.log("text", creditText);
+		endGameScreen.addText(creditText, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
 
 
 	}
@@ -380,15 +383,13 @@ function update() {
 }
 
 
-function render(){
+function render() {
 
 	if(globalDebug){
 
 		
 
 	}
-
-
 
 }
 
@@ -741,7 +742,7 @@ function resizeGame(x, y, centerPoint, currentLevel) {
 
 */
 
-function flashText(text, x, y){
+function showFullscreenText(){
 
 	game.time.events.add(500, function(){
 
@@ -753,6 +754,25 @@ function flashText(text, x, y){
 
 			}, this);
 
+
+}
+
+function showPauseText(){
+
+	pauseText.alpha = 1;	
+	pauseText.y = game.height / 2;
+	pauseText.x = game.width / 2;
+
+
+}
+
+function hidePauseText(){
+
+	game.time.events.add(0, function(){
+
+		game.add.tween(pauseText).to({alpha: 0}, 1500, Phaser.Easing.Linear.None, true);
+
+	}, this);
 
 }
 
@@ -797,12 +817,47 @@ function mouseUpEvents(pointer){
 		}
 		else if(!doubleClick && pointer.msSinceLastClick < game.input.doubleTapRate * 2){
 
-			flashText("Double Tap to Enter/Exit Fullscreen", game.width / 2, game.height / 2);
+			showFullscreenText();
 
 		}
 
 }
 
+$(document).keyup(function(event){
+
+	if(event.keyCode == 27){
+
+
+		if(game.paused){
+
+			menuStages.game = true;
+			menuStages.paused = false;
+
+			game.paused = false;
+
+			hidePauseText();
+
+
+		}
+		else{
+
+
+			showPauseText();
+
+			menuStages.game = false;
+			menuStages.paused = true;
+
+
+			game.paused = true;
+
+
+		}
+
+		console.log("Press");
+
+	}
+
+});
 
 
 function hitBlock(body1, body2){
@@ -815,7 +870,7 @@ function hitBlock(body1, body2){
 
 	var blockHit = levels[currentLevel].getBlock(body2.id);
 
-	if(typeof blockHit == "undefined"){
+	if(typeof blockHit == "undefined" || blockHit.isPowerup()){
 
 		return;
 
@@ -833,6 +888,7 @@ function hitBlock(body1, body2){
 		body2.sprite.visible = false;
 		body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
 
+		blockHit.markPowerup();
 		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true));
 
 		console.log("Powerup Spawned!");
@@ -842,8 +898,8 @@ function hitBlock(body1, body2){
 
 		body2.kinematic = true;
 		body2.clearCollision();
-		game.add.tween(body2.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
-
+		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true));
+		blockHit.getTween().onComplete.add(function(){blockHit.destroy()}, this);
 	}
 	
 	var blockVelocity = new Phaser.Point(ball.body.velocity.x + game.rnd.integerInRange(-100, 100), ball.body.velocity.y + game.rnd.integerInRange(-100, 100));
@@ -1114,7 +1170,7 @@ function buttonSelect(button){
 			menuStages.game = true;
 
 			failScreen.setVisibility(false);
-			levels[currentLevel].setVisibility(true, true);
+			levels[currentLevel].setVisibility(true, false);
 			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
 			resetBall();
@@ -1205,8 +1261,8 @@ function paddleMove(paddleBody, lineAngle){
 
 function resetBall(){
 
-	ball.body.x = game.width * (2 / 3);
-	ball.body.y = game.height * (2 / 3);
+	ball.body.x = game.width * 0.1;
+	ball.body.y = game.height * 0.1;
 
 	ball.body.velocity.x = 0;
 	ball.body.velocity.y = 0;
@@ -1286,11 +1342,10 @@ function updateBallVelocity(){
 
 	if(ballVector.getMagnitude() == 0){
 
-		ballVector.set(ball.body.velocity.x + 0.01, ball.body.velocity.y);
+		ballVector.set(0.01, 0.01);
 
 
 	}
-
 
 	if(ballVector.getMagnitude() < ballSpeed || ballVector.getMagnitude() == 0){
 
@@ -1358,6 +1413,7 @@ var Block = (
 			this.absolute = false;
 
 			this.blockAlive = true;
+			this.powerup = false;
 
 			initBlockPhysics(this.sprite);
 
@@ -1421,16 +1477,25 @@ var Block = (
 		};
 
 		//Make this block dissapear.
-		Block.prototype.hide = function(){
+		Block.prototype.destroy = function(){
 
 			this.sprite.visible = false;
-			this.sprite.alive = false;
 
 			this.blockAlive = false;
 
 			this.sprite.body.removeFromWorld();
+			this.sprite.body.sleepMode = p2.World.BODY_SLEEPING;
 
 		};
+
+		Block.prototype.hide = function(){
+
+			this.sprite.visible = false;
+			this.sprite.body.removeFromWorld();
+
+			//this.sprite.body.sleepMode = p2.World.BODY_SLEEPING;
+
+		}
 
 		//Make this block appear.
 		Block.prototype.show = function(){
@@ -1457,7 +1522,7 @@ var Block = (
 		}
 
 		Block.prototype.isAlive = function(){
-
+			console.log(this.blockAlive);
 			return this.blockAlive;
 
 		}
@@ -1471,6 +1536,18 @@ var Block = (
 		Block.prototype.getTween = function(){
 
 			return this.tween;
+
+		}
+
+		Block.prototype.markPowerup = function(){
+
+			this.powerup = true;
+
+		}
+
+		Block.prototype.isPowerup = function(){
+
+			return this.powerup;
 
 		}
 
@@ -1795,7 +1872,7 @@ var Level = (
 
 					console.log("hide");
 
-					blocks[i].hide();
+					blocks[i].destroy();
 
 				}
 				else if(blocks[i].isAlive()){
