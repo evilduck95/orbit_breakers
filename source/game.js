@@ -113,10 +113,9 @@ function preload() {
 
 function create() {
 
+	ambience.play();
 	bgMusic.volume = 0.25;
 	lostSound.volume = 0.25;
-
-	ambience.play();
 
 	//Setup reference points, center, mouse and paddle.
 	centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
@@ -171,8 +170,8 @@ function create() {
 	//Add mouse events to game on mouse up.
 	game.input.onUp.add(function(pointer){ mouseUpEvents(pointer); }, this);
 
-	
 
+	//game.paused = true;
 	
 
 	
@@ -204,6 +203,7 @@ function create() {
 	hud.lives.anchor.setTo(1, 0);
 	hud.lives.text = lives;
 
+	//Group sounds under a single object.
 	sounds = {
 
 		pop: game.add.audio('pop'),
@@ -221,12 +221,15 @@ function create() {
 	//Read in Xml values and build levels.
 	initXMLLevels();
 
+	
 
+	//Setup text that reminds user how to go fullscreen.
 	fullscreenText = game.add.text(game.width / 2, game.height / 2, "Double Click to go Fullscreen", textStyle);
 	fullscreenText.anchor.set(0.5);
 	fullscreenText.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
 	fullscreenText.alpha = 0;
 
+	//Setup text telling the user that they have paused.
 	pauseText = game.add.text(game.width / 2, game.height / 2, "Paused", textStyle);
 	pauseText.anchor.set(0.5, 0.5);
 	pauseText.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
@@ -236,6 +239,9 @@ function create() {
 	//Make everything dissapear until the game starts.
 	paddle.visible = false;
 	ball.visible = false;
+
+	game.sound.mute = false;
+	console.log("setup", game.sound.mute);
 
 }
 
@@ -286,7 +292,21 @@ function createMenus() {
 
 	});
 
-	jQuery.get('data/tutorial.txt', function(data){
+
+	var textFileName;
+
+	if(mobile){
+
+		textFileName = 'data/tutorialMob.txt';
+
+	}
+	else{
+
+		textFileName = 'data/tutorialPC.txt';
+
+	}
+
+	jQuery.get(textFileName, function(data){
 
 		tutorialText = data;
 
@@ -304,12 +324,16 @@ function update() {
 	//Change function of update based on games current stage.
 	if(menuStages.main || menuStages.options || menuStages.tutorial){
 
-		//Pause and hide level so buttons can be seen.
-		game.paused = true;
+		bgMusic.pause();
 
-		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
-		levels[currentLevel].setVisibility(false);
+
+		//Have levels ready but not visible as soon as they have been loaded from their file.
+		if(typeof levels[currentLevel] != "undefined"){
+
+			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
+			levels[currentLevel].setVisibility(false);
 			
+		}
 
 	}
 	else if(menuStages.endGame){
@@ -459,48 +483,37 @@ function initPhysics(){
 function initXMLLevels(levelNumber){
 
 
+	var levelsXml;
+
 	$(function(){
 
-			$.ajax(
+		$.ajax({
 
-					{
+			type: "GET",
+			url: "data/levels.xml",
+			dataType: "xml",
 
-						type: "GET",
-						url: "data/levels.xml",
-						dataType: "xml",
+			success: function(xml){
 
-						success: function(xml){
+				//var xmlDocument = $.parseXML(xml), $xml = $(xmlDocument);
+				levelsXml = xml;
 
-							var xmlDocument = $.parseXML(xml), $xml = $(xmlDocument);
+				buildLevels(levelsXml);
 
+				for(var i = 0; i < levels.length; i++){
 
-								buildLevels(xml);
+					if(i < levelNumber){
 
-
-							for(var i = 0; i < levels.length; i++){
-
-								if(i < levelNumber){
-
-									levels[i].deactivateBlock("all");
-
-								}
-
-								levels[i].setVisibility(false, true);
-
-							}
-
-
-
-						}
+						levels[i].deactivateBlock("all");
 
 					}
 
-				);
-		}
-	);
+					levels[i].setVisibility(false, true);
 
-
-	
+				}
+			}
+		});
+	});
 
 }
 
@@ -601,7 +614,6 @@ function buildLevels(xml){
 
 
 	console.log(levels);
-
 
 }
 
@@ -1031,6 +1043,9 @@ function checkBallOutOfBounds(){
 
 function buttonSelect(button){
 
+	console.log("Before", game.sound.mute);
+	sounds.beep.play();
+
 	switch(button.name){
 
 		case !"togglesound":
@@ -1070,7 +1085,6 @@ function buttonSelect(button){
 			menuStages.options = true;
 			menuStages.game = false;
 
-			game.paused = true;
 
 			mainMenu.setVisibility(false);
 			optionsMenu.setVisibility(true);
@@ -1082,7 +1096,6 @@ function buttonSelect(button){
 			menuStages.main = false;
 			menuStages.tutorial = true;
 
-			game.paused = true;
 
 			var widthBuffer = game.width * 0.2;
 			var heightBuffer = game.height * 0.3;
@@ -1133,7 +1146,6 @@ function buttonSelect(button){
 			menuStages.main = true;
 			menuStages.game = false;
 
-			game.paused = true;
 
 			optionsMenu.setVisibility(false);
 			tutorialScreen.setVisibility(false);
@@ -1193,8 +1205,6 @@ function buttonSelect(button){
 
 
 	}
-
-	sounds.beep.play();
 
 	resizeGame(window.screen.width, window.screen.height, centerPoint, currentLevel);
 
@@ -1522,7 +1532,7 @@ var Block = (
 		}
 
 		Block.prototype.isAlive = function(){
-			console.log(this.blockAlive);
+
 			return this.blockAlive;
 
 		}
