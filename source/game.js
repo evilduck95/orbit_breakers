@@ -113,9 +113,10 @@ function preload() {
 
 function create() {
 
-	ambience.play();
 	bgMusic.volume = 0.25;
 	lostSound.volume = 0.25;
+
+	ambience.play();
 
 	//Setup reference points, center, mouse and paddle.
 	centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
@@ -170,8 +171,7 @@ function create() {
 	//Add mouse events to game on mouse up.
 	game.input.onUp.add(function(pointer){ mouseUpEvents(pointer); }, this);
 
-	game.paused = true;
-
+	
 
 	
 
