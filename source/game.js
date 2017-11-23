@@ -1,7 +1,7 @@
 
 
-var game = new Phaser.Game(window.innerWidth, window.innerHeight, Phaser.CANVAS, '', { preload: preload, create: create, update: update, render: render });
-
+var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, '', { preload: preload, create: create, update: update, render: render });
+	console.log(window.devicePixelRatio);
 var bgMusic = new Audio('assets/sound/music.mp3');
 var ambience = new Audio('assets/sound/ambience.mp3');
 var lostSound = new Audio('assets/sound/lost.mp3');
@@ -10,7 +10,7 @@ var aspect = window.availWidth / window.availHeight;
 
 //Player paddle vars.
 var paddle, secondPaddle;
-var paddleSize = { x: 150, y:24};
+var paddleSize = { x: 100, y:16};
 var secondPaddleActive = false;
 //Paddle circle radius.
 var paddleRunRadius = 350;
@@ -83,6 +83,7 @@ function preload() {
 	game.load.image('ball', 'assets/visual/ball.png');
 
 	//Blocks for targets and power ups.
+	game.load.image('orangeblock', 'assets/visual/block(orange).png');
 	game.load.image('redblock', 'assets/visual/block(red).png');
 	game.load.image('greenblock', 'assets/visual/block(green).png');
 	game.load.image('blueblock', 'assets/visual/block(blue).png');
@@ -107,6 +108,8 @@ function preload() {
 	game.load.audio('powerup', 'assets/sound/pwrup.mp3');
 	game.load.audio('lost', 'assets/sound/lost.mp3');
 
+	
+
 }
 
 
@@ -117,13 +120,80 @@ function create() {
 	bgMusic.volume = 0.25;
 	lostSound.volume = 0.25;
 
+	paddleRunRadius = $(window).width() / 4;
+	blockSize = ((Math.sin(Math.PI / 4) * (paddleRunRadius * 2)) - levelBuffer) / 12;
+
+
+
+	//Create all specialized in game objects.
+	createObj();
+
+	//Start up P2 Physics/
+	initPhysics();
+
+	//Add extra pointer for mobile users to use double touch.
+	if(mobile){
+
+		game.input.addPointer();
+
+	}
+
+	//Add mouse events to game on mouse up.
+	game.input.onUp.add(function(pointer){ mouseUpEvents(pointer); }, this);
+	
+	//Initial Resize.
+	resizeGame($(window).width, $(window).height, centerPoint, currentLevel);
+
+	//Create all menus and add to game.
+	createMenus();
+
+	
+
+	//Group sounds under a single object.
+	sounds = {
+
+		pop: game.add.audio('pop'),
+		beep: game.add.audio('beep'), 
+		power: game.add.audio('powerup'),
+		lost: game.add.audio('lost')
+
+	};
+
+
+	//Add muted speaker to game but don't show yet.
+	mutedSpeaker = game.add.sprite(100, 100, 'mutedSpeaker');
+	mutedSpeaker.visible = false;
+
+	//Read in Xml values and build levels.
+	initXMLLevels();
+
+	//Create all needed text that isn't inside buttons.
+	createText();
+
+
+	//Make everything dissapear until the game starts.
+	paddle.visible = false;
+	ball.visible = false;
+
+	game.sound.mute = false;
+
+	loadGame();
+
+	if(isNaN(currentLevel)){
+
+		currentLevel = 0;
+
+	}
+
+	
+}
+
+function createObj(){
+
 	//Setup reference points, center, mouse and paddle.
 	centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
 	mousePoint = new Phaser.Point();
 	paddlePoint = new Phaser.Point();
-
-
-
 
 	//Add a background image, anchor from center.
 	backgroundImage = game.add.sprite(0, 0, 'background');
@@ -151,36 +221,9 @@ function create() {
 	//Set ball to global size.
 	ball.width = ball.height= ballSize;
 
+}
 
-	/*
-	
-		PHYSICS
-
-	*/
-
-	initPhysics();
-
-	//Add extra pointer for mobile users to use double touch.
-	if(mobile){
-
-		game.input.addPointer();
-
-	}
-
-	//Add mouse events to game on mouse up.
-	game.input.onUp.add(function(pointer){ mouseUpEvents(pointer); }, this);
-
-
-	//game.paused = true;
-	
-
-	
-	//Initial Resize.
-	resizeGame($(window).width, $(window).height, centerPoint, currentLevel);
-
-
-	//Create all menus and add to game.
-	createMenus();
+function createText(){
 
 	//Default text style.
 	var textStyle = { font: "30px Bauhaus 93", fill: "#fff"};
@@ -203,25 +246,6 @@ function create() {
 	hud.lives.anchor.setTo(1, 0);
 	hud.lives.text = lives;
 
-	//Group sounds under a single object.
-	sounds = {
-
-		pop: game.add.audio('pop'),
-		beep: game.add.audio('beep'), 
-		power: game.add.audio('powerup'),
-		lost: game.add.audio('lost')
-
-	};
-
-
-	//Add muted speaker to game but don't show yet.
-	mutedSpeaker = game.add.sprite(100, 100, 'mutedSpeaker');
-	mutedSpeaker.visible = false;
-
-	//Read in Xml values and build levels.
-	initXMLLevels();
-
-	
 
 	//Setup text that reminds user how to go fullscreen.
 	fullscreenText = game.add.text(game.width / 2, game.height / 2, "Double Click to go Fullscreen", textStyle);
@@ -234,14 +258,6 @@ function create() {
 	pauseText.anchor.set(0.5, 0.5);
 	pauseText.setShadow(6, 6, "rgba(0, 0, 0, 1)", 5);
 	pauseText.alpha = 0;
-
-
-	//Make everything dissapear until the game starts.
-	paddle.visible = false;
-	ball.visible = false;
-
-	game.sound.mute = false;
-	console.log("setup", game.sound.mute);
 
 }
 
@@ -258,9 +274,17 @@ function createMenus() {
 	//Create options menu for settings manipulation.
 	optionsMenu = new Menu("Game Options");
 	optionsMenu.addButton(game.width / 2, game.height / 2, "Sound", "togglesound");
-	optionsMenu.addButton(game.width / 2, game.height * (2 / 3), "Back", "mainmenu");
+	optionsMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "Back", "mainmenu");
+	optionsMenu.addButton(game.width / 3, game.height * (2 / 3), "Clear Save", "clearsaves");
 
 	optionsMenu.setVisibility(false);
+
+
+
+
+
+
+
 
 	//Next level menu for ending of levels.
 	nextLevelMenu = new Menu("Level Complete!");
@@ -312,13 +336,14 @@ function createMenus() {
 
 	})
 
+
+
 	endGameScreen.setVisibility(false);
 
 }
 
 
 function update() { 
-
 
 
 	//Change function of update based on games current stage.
@@ -343,6 +368,12 @@ function update() {
 		console.log("text", creditText);
 		endGameScreen.addText(creditText, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
 
+
+
+	}
+	else if(menuStages.levelFinish){
+
+		game.paused = true;
 
 	}
 	else if(menuStages.fail){
@@ -401,6 +432,8 @@ function update() {
 
 		//Check if the ball goes out of bounds for failure condition.
 		checkBallOutOfBounds();
+
+
 
 	}
 
@@ -483,8 +516,6 @@ function initPhysics(){
 function initXMLLevels(levelNumber){
 
 
-	var levelsXml;
-
 	$(function(){
 
 		$.ajax({
@@ -496,9 +527,8 @@ function initXMLLevels(levelNumber){
 			success: function(xml){
 
 				//var xmlDocument = $.parseXML(xml), $xml = $(xmlDocument);
-				levelsXml = xml;
 
-				buildLevels(levelsXml);
+				buildLevels(xml);
 
 				for(var i = 0; i < levels.length; i++){
 
@@ -601,11 +631,7 @@ function buildLevels(xml){
 
 			}
 
-			//levels.push(newLevel);
-
 			return newLevel;
-
-			console.log("level", newLevel);
 
 		}
 
@@ -710,27 +736,75 @@ function loadBlockLines(xml, level, number){
 
 /*
 
+	DATA
+
+*/
+
+function saveGame(){
+
+	localStorage.setItem("levelNumber", currentLevel + 1);
+	localStorage.setItem("lives", lives);
+
+	console.log("Game Saved", currentLevel + 1);
+
+}
+
+function loadGame(){
+
+	currentLevel = parseInt(localStorage.getItem("levelNumber"));
+	lives = parseInt(localStorage.getItem("lives"));
+
+	var debugLoad = ("Game Loaded, Level " + currentLevel + " | Lives " + lives).toString();
+	debugLoad = debugLoad.replace(/NaN/g, "-");
+
+	console.log(debugLoad);
+
+}
+
+function clearSave(){
+
+	localStorage.removeItem("levelNumber");
+	localStorage.removeItem("lives");
+
+	console.log("All Saves Removed");
+
+}
+
+/*
+
 	DISPLAY
 
 */
 
 
 
-function resizeGame(x, y, centerPoint, currentLevel) {
+function resizeGame() {
 
-	console.log("Resizing to", $(window).width(), "x", $(window).height());
+	console.log("Resizing to", $(window).outerWidth(), "x", $(window).outerHeight());
 
 	game.scale.setGameSize($(window).width(), $(window).height());
+
+	var diameter = 2 * paddleRunRadius;
+	var windowWidth = $(window).width();
+	var windowHeight = $(window).height();
+
+
 
 	backgroundImage.anchor.setTo(0.5, 0.5);
 	backgroundImage.x = game.width / 2;
 	backgroundImage.y = game.height / 2;
 
-	if($(window).width() > backgroundImage.width && $(window).height() > backgroundImage.height){
+	if(windowWidth > backgroundImage.width && windowHeight > backgroundImage.height){
 
-		backgroundImage.scale.setTo($(window).width / backgroundImage.width);
+		backgroundImage.scale.setTo(windowHeight / backgroundImage.height);
 
 	}
+	else if(windowHeight > backgroundImage.height){
+
+		backgroundImage.scale.setTo(windowWidth / backgroundImage.width);
+
+	}
+
 
 	if(typeof centerPoint != "undefined" && menuStages.game){
 
@@ -743,8 +817,6 @@ function resizeGame(x, y, centerPoint, currentLevel) {
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
 	}
-
-
 
 }
 
@@ -766,7 +838,6 @@ function showFullscreenText(){
 
 			}, this);
 
-
 }
 
 function showPauseText(){
@@ -774,7 +845,6 @@ function showPauseText(){
 	pauseText.alpha = 1;	
 	pauseText.y = game.height / 2;
 	pauseText.x = game.width / 2;
-
 
 }
 
@@ -802,7 +872,7 @@ function mouseUpEvents(pointer){
 		if(!game.scale.isFullScreen && !mobile && menuStages.game){
 
 
-			resizeGame(window.innerWidth, window.innerHeight, centerPoint, currentLevel);
+			resizeGame();
 
 			if(game.paused){
 
@@ -815,7 +885,7 @@ function mouseUpEvents(pointer){
 		if(game.scale.isFullScreen && doubleClick){
 
 			game.scale.stopFullScreen();
-			resizeGame(window.innerWidth, window.innerHeight, centerPoint, currentLevel);
+			resizeGame();
 
 
 		}
@@ -823,7 +893,7 @@ function mouseUpEvents(pointer){
 
 
 			game.scale.startFullScreen(false);
-			resizeGame(window.screen.width, window.screen.height, centerPoint, currentLevel);
+			resizeGame();
 
 
 		}
@@ -933,7 +1003,6 @@ function hitBlock(body1, body2){
 
 	hud.blocksLeft.text = levels[currentLevel].numBlocksLeft();
 
-
 }
 
 function hitPaddle(body1, body2){
@@ -974,8 +1043,6 @@ function collectPowerup(body1, body2){
 
 	sounds.power.play();
 
-
-
 }
 
 function removePowerUp(){
@@ -988,17 +1055,6 @@ function removePowerUp(){
 
 
 	//secondPaddle.visible = false;
-
-
-
-}
-
-
-
-function levelFinished(){
-
-	currentLevel++;
-	resetBall();
 
 }
 
@@ -1035,11 +1091,7 @@ function checkBallOutOfBounds(){
 
 	}
 
-
-
 }
-
-
 
 function buttonSelect(button){
 
@@ -1074,7 +1126,7 @@ function buttonSelect(button){
 			paddle.visible = true;
 			ball.visible = true;
 
-			resizeGame()
+			resizeGame();
 
 
 		break;
@@ -1111,8 +1163,6 @@ function buttonSelect(button){
 
 		case "togglesound":
 			
-			console.log(game.sound.mute);
-
 			if(game.sound.mute){
 
 				bgMusic.play();
@@ -1137,6 +1187,17 @@ function buttonSelect(button){
 
 			optionsMenu.setVisibility(true);
 
+
+		break;
+
+		case "clearsaves":
+
+			clearSave();
+
+			optionsMenu.changeText("clearsaves", "Deleted");
+
+			currentLevel = 0;
+			lives = 3;
 
 		break;
 
@@ -1206,10 +1267,6 @@ function buttonSelect(button){
 
 	}
 
-	resizeGame(window.screen.width, window.screen.height, centerPoint, currentLevel);
-
-
-
 }
 
 function checkLevelCompletion(){
@@ -1217,8 +1274,10 @@ function checkLevelCompletion(){
 	//Check for whether the current level is finished.
 	if(levels[currentLevel].numBlocksLeft() <= 0){
 
-		//game.paused = true;
+		game.paused = true;
 		menuStages.game = false;
+
+		console.log(typeof currentLevel, levels);
 
 		//If there are no levels left, show end game screen, otherwise show level finish menu.
 		if(typeof levels[currentLevel + 1] == "undefined"){
@@ -1229,8 +1288,30 @@ function checkLevelCompletion(){
 		}
 		else{
 
+			saveGame();
+
+			menuStages.game = false;
 			menuStages.levelFinish = true;
 			nextLevelMenu.setVisibility(true);
+
+
+			if (typeof console._commandLineAPI !== 'undefined') {
+
+			    console.API = console._commandLineAPI; //Clear Chrome Console.
+
+			} else if (typeof console._inspectorCommandLineAPI !== 'undefined') {
+
+			    console.API = console._inspectorCommandLineAPI; //Clear Safari Console.
+
+			} else if (typeof console.clear !== 'undefined') {
+
+			    console.API = console;
+
+			}
+
+			console.API.clear();
+
+			
 
 		}
 
@@ -1336,7 +1417,7 @@ function touchControls(lineAngle){
 
 function setReferenceParameters(){
 
-	centerPoint.set(backgroundImage.x, backgroundImage.y);
+	centerPoint.set(game.width / 2, game.height / 2);
 
 	//Collect mouse co-ordinates into a point.
 	mousePoint.set(game.input.x, game.input.y);
@@ -1381,10 +1462,6 @@ function resetMessage(){
 
 
 }
-
-
-
-
 
 
 
@@ -1568,9 +1645,6 @@ var Block = (
 );
 
 
-
-
-
 /*
 
 	Blockline
@@ -1695,9 +1769,6 @@ var Level = (
 
 			}
 
-
-
-
 		};
 
 		//Add blocks to the Level container. Also is able to dissassemble BlockLines into Blocks.
@@ -1709,8 +1780,6 @@ var Level = (
 				this.blocks.push(blockObj);
 
 				if(!blockObj.isAbsolute()){
-
-					console.log("Block Added", blockObj.getPos().x, blockObj.getPos().y);
 
 					this.blockPositions.push({ x: blockObj.getPos().x * blockSize, y: blockObj.getPos().y * blockSize });
 
@@ -1939,7 +2008,7 @@ Button.prototype.remove = function(){
 
 Button.prototype.getName = function(){
 
-	return this.name;
+	return this.button.name;
 
 }
 
@@ -1962,6 +2031,17 @@ Button.prototype.setPos = function(x, y){
 	this.button.offsetX = x - 100;
 	this.button.offsetY = y;
 
+
+}
+
+Button.prototype.setText = function(newText){
+
+	this.text.setText(newText);
+}
+
+Button.prototype.getText = function(){
+
+	return this.text;
 
 }
 
@@ -2030,5 +2110,19 @@ Menu.prototype.addText = function(text, x, y, dx, dy){
 	newText.setTextBounds(x, y, dx, dy);
 
 	this.texts.push(newText);
+
+}
+
+Menu.prototype.changeText = function(buttonName, newText){
+
+	for(var i = 0; i < this.buttons.length; i++){
+
+		if(this.buttons[i].getName() == buttonName){
+
+			this.buttons[i].setText(newText);
+
+		}
+
+	}
 
 }
