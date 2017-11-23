@@ -9,16 +9,7 @@
 
 <root>
 
-	<level id="1" name="A Single Block">
-		
-		<block absolute="false">
-			<color>blue</color>
-			<x>9</x>
-			<y>7</y>
-
-		</block>
-
-	</level>
+	
 
 	<level id="2" name="The Box">
 			
@@ -80,7 +71,16 @@
 
 	</level>
 
+	<level id="1" name="A Single Block">
+		
+		<block absolute="false">
+			<color>blue</color>
+			<x>9</x>
+			<y>7</y>
 
+		</block>
+
+	</level>
 
 	<level id="1" name="Cross">
 
