@@ -117,7 +117,7 @@ function create() {
 
 	//play ambient music, adjust volumes accordingly.
 	ambience.play();
-	bgMusic.volume = 0.25;
+	bgMusic.volume = 0.1;
 	lostSound.volume = 0.25;
 
 	//Paddle circle radius is a quarter of the screen, block size is proportional.
@@ -149,7 +149,6 @@ function create() {
 	createMenus();
 
 	
-
 	//Group sounds under a single object.
 	sounds = {
 
@@ -439,19 +438,21 @@ function render() {
 
 	if(globalDebug){
 
-		
+		ball.debug = true;
+		paddle.debug = true;
+		secondPaddle.debug = true;
+
+		for(i = 0; i < levels.length; i++){
+
+			levels[i].debug(true);
+
+		}
+
 
 	}
 
 }
 
-/*			#####
-	
-	CUSTOM DESIGNED FUNCTIONS
-
-			#####
-
-*/
 
 /*
 
@@ -797,6 +798,20 @@ function hidePauseText(){
 
 */
 
+function pauseGame(){
+
+	game.paused = true;
+	showPauseText();
+
+}
+
+function unPauseGame(){
+
+	game.paused = false;
+	hidePauseText();
+
+}
+
 function mouseUpEvents(pointer){
 
 	//Track a boolean as to whether a double click has been performed.
@@ -844,7 +859,7 @@ function mouseUpEvents(pointer){
 
 }
 	
-//Setup pause event using JQuery.
+//Pause/unpause game when Escape key is pressed.
 $(document).keyup(function(event){
 
 	//Check if "esc" key was pressed.
@@ -881,6 +896,28 @@ $(document).keyup(function(event){
 		}
 
 	}
+
+});
+
+//Pause and resize game when window is resized.
+$(window).on('resize', function(event){
+
+	pauseGame();
+	resizeGame();	
+
+});
+
+//Pause game when mouse leaves window.
+$(document).mouseleave(function(){
+
+	pauseGame();
+
+});
+
+//Unpause game when mouse enters window.
+$(document).mouseenter(function(){
+
+	unPauseGame();
 
 });
 
@@ -1372,15 +1409,13 @@ function paddleMove(paddleBody, lineAngle){
 	//Rotate paddle so it always faces center.
 	paddleBody.body.rotation = lineAngle;
 
-	
-
 }
 
 function resetBall(){
 
 	//Move ball to near corner.
-	ball.body.x = game.width * 0.1;
-	ball.body.y = game.height * 0.1;
+	ball.body.x = (game.width / 2) - (levelBuffer * 2);
+	ball.body.y = (game.height / 2) - (levelBuffer * 2);
 
 	//Send ball at level.
 	ball.body.velocity.x = 0;
@@ -1555,6 +1590,16 @@ var Block = (
 
 
 		};
+
+		Block.prototype.debug = function(debug){
+
+			if(debug){
+
+				this.body.debug = true;
+
+			}
+
+		}
 
 		//Set the block at a position.
 		Block.prototype.setPos = function(x, y){
@@ -1785,6 +1830,20 @@ var Level = (
 
 		}
 
+		Level.prototype.debug = function(debug){
+
+			if(debug){
+
+				for(var i = 0; i < blocks.length; i++){
+
+					blocks[i].debug(true);
+
+				}
+
+			}
+
+
+		}
 
 		//Updates the origin co-ordinate of the Level space.
 		Level.prototype.updatePosition = function(center, radius, buffer, checkOutOfBounds){
