@@ -69,9 +69,6 @@ var fullscreenText, pauseText;
 //Container for all sounds.
 var sounds;
 
-//Allows debug information to be shown.
-var globalDebug = true;
-
 
 function preload() {
 	
@@ -110,8 +107,6 @@ function preload() {
 	game.load.audio('lost', 'assets/sound/lost.mp3');
 
 }
-
-
 
 function create() {
 
@@ -186,7 +181,6 @@ function create() {
 		lives = 3;
 
 	}
-
 	
 }
 
@@ -207,6 +201,7 @@ function createObj(){
 	//Load in paddle asset in center, also load in second paddle.
 	paddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
 	secondPaddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
+	secondPaddle.tint = 0xffffff;
 
 	secondPaddle.visible = false;
 
@@ -283,6 +278,7 @@ function createMenus() {
 	//Next level menu for ending of levels.
 	nextLevelMenu = new Menu("Level Complete!");
 	nextLevelMenu.addButton(game.width / 2, game.height / 2, "Continue", "nextlevel");
+	nextLevelMenu.addText("Game Saved", (game.width / 2) - 100, (game.height / 2) - 100, game.width, game.height);
 
 	nextLevelMenu.setVisibility(false);
 
@@ -367,7 +363,7 @@ function update() {
 	}
 	else if(menuStages.levelFinish){
 
-		game.paused = true;
+		//game.paused = true;
 
 	}
 	else if(menuStages.fail){
@@ -506,8 +502,9 @@ function initXMLLevels(levelNumber){
 
 	//Use AJAX to load information from XML file.
 	$(function(){
-
-		$.ajax({
+		$.when(
+	
+			$.ajax({
 
 			type: "GET",
 			url: "data/levels.xml",
@@ -515,24 +512,31 @@ function initXMLLevels(levelNumber){
 
 			success: function(xml){
 
-				buildLevels(xml);
+					buildLevels(xml);
 
 
-				//Deactivate all levels...
-				for(var i = 0; i < levels.length; i++){
+					//Deactivate all levels...
+					for(var i = 0; i < levels.length; i++){
 
-					if(i < levelNumber){
+						if(i < levelNumber){
 
-						//Stop blocks participating in collisions.
-						levels[i].deactivateBlock("all");
+							//Stop blocks participating in collisions.
+							levels[i].deactivateBlock("all");
+
+						}
+
+						//Force invisibility.
+						levels[i].setVisibility(false, true);
 
 					}
-
-					//Force invisibility.
-					levels[i].setVisibility(false, true);
-
 				}
-			}
+
+			})
+
+		).then(function(){
+
+			console.log("XML Loading Finished.");
+
 		});
 	});
 
@@ -757,6 +761,12 @@ function showFullscreenText(){
 
 function showPauseText(){
 
+	if(typeof pauseText == "undefined"){
+
+		return;
+
+	}
+
 	//Show the pause game text and center it.
 	pauseText.alpha = 1;	
 	pauseText.y = game.height / 2;
@@ -766,7 +776,11 @@ function showPauseText(){
 
 function hidePauseText(){
 
-	console.log(pauseText);
+	if(typeof pauseText == "undefined"){
+
+		return;
+
+	}
 
 	//Remove the pause game text by making it fade out slowly over 1.5s.
 	game.time.events.add(0, function(){
@@ -844,6 +858,39 @@ function mouseUpEvents(pointer){
 
 }
 
+function toggleMute(){
+
+	//if game is muted.
+	if(game.sound.mute){
+
+		//Play sounds.
+		bgMusic.play();
+		ambience.play();
+		lostSound.volume = 1;
+
+		//Enable game sound.
+		game.sound.mute = false;
+		//Make speaker invisible.
+		mutedSpeaker.visible = false;
+
+	}
+	else{	//if not muted.
+
+		//Stop sounds.
+		bgMusic.pause();
+		ambience.pause();
+		lostSound.volume = 0;
+
+		//Stop game audio.
+		game.sound.mute = true;
+		//Show speaker to inform user.
+		mutedSpeaker.visible = true;
+
+	}
+
+}
+
+
 $(document).ready(function(event){
 
 	//Pause/unpause game when Escape key is pressed.
@@ -853,7 +900,7 @@ $(document).ready(function(event){
 		if(event.keyCode == 27){
 
 			//If game is paused.
-			if(game.paused){
+			if(game.sound.mute){
 
 				//Revert to live game condition.
 				menuStages.game = true;
@@ -884,6 +931,12 @@ $(document).ready(function(event){
 
 		}
 
+		if(event.keyCode == 77){
+
+			toggleMute();
+
+		}
+
 	});
 
 	//Pause and resize game when window is resized.
@@ -897,14 +950,22 @@ $(document).ready(function(event){
 	//Pause game when mouse leaves window.
 	$(document).mouseleave(function(){
 
-		pauseGame();
+		if(menuStages.game){
+			
+			pauseGame();
+
+		}
 
 	});
 
 	//Unpause game when mouse enters window.
 	$(document).mouseenter(function(){
 
-		unPauseGame();
+		if(menuStages.game){
+
+			unPauseGame();
+
+		}
 
 	});
 
@@ -946,8 +1007,8 @@ function hitBlock(body1, body2){
 
 			//Spawn a paddle powerup!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
-			body2.width = blockSize;
-			body2.height = blockSize;
+			body2.sprite.width = blockSize;
+			body2.sprite.height = blockSize;
 
 			blockHit.markPowerup("paddle");
 
@@ -956,15 +1017,15 @@ function hitBlock(body1, body2){
 
 			//Spawn an extra life!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'redblock');
-			body2.width = blockSize;
-			body2.height = blockSize;
+			body2.sprite.width = blockSize;
+			body2.sprite.height = blockSize;
 
 			blockHit.markPowerup("life");
 
 		}
 
 		//All powerups have a constant tween.
-		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 1000, Phaser.Easing.Linear.None, true, 0, 100, true));
+		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 500, Phaser.Easing.Linear.None, true, 0, 100, true));
 
 		//Log that a powerup has spawned.
 		console.log("Powerup Spawned!");
@@ -979,12 +1040,12 @@ function hitBlock(body1, body2){
 		//Start temporary tween to fade out.
 		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true));
 		//Destroy block when tween is complete.
-		blockHit.getTween().onComplete.add(function(){blockHit.destroy()}, this);
+		blockHit.getTween().onComplete.add(function(){body2.sprite.kill}, this);
 	}
 	
 	//Set block to fly off opposite ball hit point.
 	var blockVelocity = new Phaser.Point(ball.body.velocity.x + game.rnd.integerInRange(-100, 100), ball.body.velocity.y + game.rnd.integerInRange(-100, 100));
-	blockVelocity.setMagnitude((ballVector.getMagnitude() * (2 / 3)) * -1);
+	blockVelocity.setMagnitude(ballVector.getMagnitude() * -1);
 
 	//Translate to body corresponding to block.
 	body2.velocity.x = blockVelocity.x;
@@ -995,9 +1056,6 @@ function hitBlock(body1, body2){
 
 	//Play a pop sound effect when colliding with a block.
 	sounds.pop.play();
-
-	//Ensure ball velocity remains constant.
-	updateBallVelocity();
 
 	//Inform level object that a block has been detroyed.
 	levels[currentLevel].blockHit();
@@ -1020,9 +1078,6 @@ function collectPowerup(body1, body2){
 
 	//Log that powerup has been collected.
 	console.log("Powerup Collected!");
-
-
-	
 
 	var blockHit = levels[currentLevel].getBlock(body1.id);
 	
@@ -1199,33 +1254,7 @@ function buttonSelect(button){
 
 		case "togglesound":
 			
-			//if game is muted.
-			if(game.sound.mute){
-
-				//Play sounds.
-				bgMusic.play();
-				ambience.play();
-				lostSound.volume = 1;
-
-				//Enable game sound.
-				game.sound.mute = false;
-				//Make speaker invisible.
-				mutedSpeaker.visible = false;
-
-			}
-			else{	//if not muted.
-
-				//Stop sounds.
-				bgMusic.pause();
-				ambience.pause();
-				lostSound.volume = 0;
-
-				//Stop game audio.
-				game.sound.mute = true;
-				//Show speaker to inform user.
-				mutedSpeaker.visible = true;
-
-			}
+			toggleMute();
 
 			//Show options menu again.
 			optionsMenu.setVisibility(true);
