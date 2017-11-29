@@ -1,6 +1,6 @@
 
 
-var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, '', { preload: preload, create: create, update: update, render: render });
+var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, '', { preload: preload, create: create, update: update });
 	console.log(window.devicePixelRatio);
 
 	//Import Javascript sounds. Imported here because they need to play whilst the game is paused.
@@ -70,7 +70,7 @@ var fullscreenText, pauseText;
 var sounds;
 
 //Allows debug information to be shown.
-var globalDebug = false;
+var globalDebug = true;
 
 
 function preload() {
@@ -434,24 +434,7 @@ function update() {
 }
 
 
-function render() {
 
-	if(globalDebug){
-
-		ball.debug = true;
-		paddle.debug = true;
-		secondPaddle.debug = true;
-
-		for(i = 0; i < levels.length; i++){
-
-			levels[i].debug(true);
-
-		}
-
-
-	}
-
-}
 
 
 /*
@@ -783,6 +766,8 @@ function showPauseText(){
 
 function hidePauseText(){
 
+	console.log(pauseText);
+
 	//Remove the pause game text by making it fade out slowly over 1.5s.
 	game.time.events.add(0, function(){
 
@@ -858,66 +843,70 @@ function mouseUpEvents(pointer){
 	}
 
 }
-	
-//Pause/unpause game when Escape key is pressed.
-$(document).keyup(function(event){
 
-	//Check if "esc" key was pressed.
-	if(event.keyCode == 27){
+$(document).ready(function(event){
 
-		//If game is paused.
-		if(game.paused){
+	//Pause/unpause game when Escape key is pressed.
+	$(document).keyup(function(event){
 
-			//Revert to live game condition.
-			menuStages.game = true;
-			menuStages.paused = false;
+		//Check if "esc" key was pressed.
+		if(event.keyCode == 27){
 
-			//Unpause.
-			game.paused = false;
+			//If game is paused.
+			if(game.paused){
 
-			//Remove paused game text.
-			hidePauseText();
+				//Revert to live game condition.
+				menuStages.game = true;
+				menuStages.paused = false;
 
+				//Unpause.
+				game.paused = false;
+
+				//Remove paused game text.
+				hidePauseText();
+
+
+			}
+			else{	//If not paused
+
+				//Show paused text.
+				showPauseText();
+
+				//Revert to paused state.
+				menuStages.game = false;
+				menuStages.paused = true;
+
+				//Pause game.
+				game.paused = true;
+
+
+			}
 
 		}
-		else{	//If not paused
 
-			//Show paused text.
-			showPauseText();
+	});
 
-			//Revert to paused state.
-			menuStages.game = false;
-			menuStages.paused = true;
+	//Pause and resize game when window is resized.
+	$(window).on('resize', function(event){
 
-			//Pause game.
-			game.paused = true;
+		pauseGame();
+		resizeGame();	
 
+	});
 
-		}
+	//Pause game when mouse leaves window.
+	$(document).mouseleave(function(){
 
-	}
+		pauseGame();
 
-});
+	});
 
-//Pause and resize game when window is resized.
-$(window).on('resize', function(event){
+	//Unpause game when mouse enters window.
+	$(document).mouseenter(function(){
 
-	pauseGame();
-	resizeGame();	
+		unPauseGame();
 
-});
-
-//Pause game when mouse leaves window.
-$(document).mouseleave(function(){
-
-	pauseGame();
-
-});
-
-//Unpause game when mouse enters window.
-$(document).mouseenter(function(){
-
-	unPauseGame();
+	});
 
 });
 
@@ -957,6 +946,9 @@ function hitBlock(body1, body2){
 
 			//Spawn a paddle powerup!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
+			body2.width = blockSize;
+			body2.height = blockSize;
+
 			blockHit.markPowerup("paddle");
 
 		}
@@ -964,6 +956,9 @@ function hitBlock(body1, body2){
 
 			//Spawn an extra life!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'redblock');
+			body2.width = blockSize;
+			body2.height = blockSize;
+
 			blockHit.markPowerup("life");
 
 		}
@@ -1591,15 +1586,6 @@ var Block = (
 
 		};
 
-		Block.prototype.debug = function(debug){
-
-			if(debug){
-
-				this.body.debug = true;
-
-			}
-
-		}
 
 		//Set the block at a position.
 		Block.prototype.setPos = function(x, y){
@@ -1827,21 +1813,6 @@ var Level = (
 		Level.prototype.getName = function(){
 
 			return this.name;
-
-		}
-
-		Level.prototype.debug = function(debug){
-
-			if(debug){
-
-				for(var i = 0; i < blocks.length; i++){
-
-					blocks[i].debug(true);
-
-				}
-
-			}
-
 
 		}
 
