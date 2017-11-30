@@ -181,6 +181,8 @@ function create() {
 		lives = 3;
 
 	}
+
+	resetBall();
 	
 }
 
@@ -216,6 +218,7 @@ function createObj(){
 
 	//Set ball to global size.
 	ball.width = ball.height= ballSize;
+
 
 }
 
@@ -428,9 +431,6 @@ function update() {
 	}
 
 }
-
-
-
 
 
 /*
@@ -708,7 +708,7 @@ function resizeGame() {
 	backgroundImage.x = game.width / 2;
 	backgroundImage.y = game.height / 2;
 
-	//If the image does not fit in the window.	
+	//If the image does not fit in the window, resize it to fit, but retain aspect ratio.
 	if(windowWidth > backgroundImage.width && windowHeight > backgroundImage.height){
 
 		backgroundImage.scale.setTo(windowHeight / backgroundImage.height);
@@ -734,7 +734,7 @@ function resizeGame() {
 
 		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
-	}
+	}//*/
 
 }
 
@@ -761,6 +761,7 @@ function showFullscreenText(){
 
 function showPauseText(){
 
+	//Check pause text has been initialised.
 	if(typeof pauseText == "undefined"){
 
 		return;
@@ -776,6 +777,7 @@ function showPauseText(){
 
 function hidePauseText(){
 
+	//Check pause text has been initialised.
 	if(typeof pauseText == "undefined"){
 
 		return;
@@ -799,6 +801,7 @@ function hidePauseText(){
 
 function pauseGame(){
 
+	//Pause simulation and show pause text.
 	game.paused = true;
 	showPauseText();
 
@@ -806,6 +809,7 @@ function pauseGame(){
 
 function unPauseGame(){
 
+	//Unpause simulation and hide pause text.
 	game.paused = false;
 	hidePauseText();
 
@@ -993,16 +997,17 @@ function hitBlock(body1, body2){
 	//Set the block as dormant (no physics).
 	blockHit.setDormant();
 	
-
+	//15% chance to spawn a powerup.
 	if(rnd >= 0.85){
 
-
+		//Powerups are dynamic colliders and the new sprite should be visible.
 		body2.dynamic = true;
-
 		body2.sprite.visible = false;
 
+		//Generate a new random number for powerup choosing.
 		rnd = game.rnd.frac();
 
+		//7.5% chance to spawn a paddle powerup.
 		if(rnd >= 0.5){
 
 			//Spawn a paddle powerup!
@@ -1013,9 +1018,9 @@ function hitBlock(body1, body2){
 			blockHit.markPowerup("paddle");
 
 		}
-		else if(rnd >= 0.25){
+		else if(rnd >= 0.5){	//7.5% chance to spawn a life.
 
-			//Spawn an extra life!
+			//Spawn an extra life powerup!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'redblock');
 			body2.sprite.width = blockSize;
 			body2.sprite.height = blockSize;
@@ -1149,6 +1154,7 @@ function checkBallOutOfBounds(){
 
 		&&
 
+		//Ball checking is not valid for end game screen or level finish screens.
 		!menuStages.endGame &&
 		!menuStages.levelFinish
 
@@ -1474,7 +1480,6 @@ function pcControls(lineAngle){
 
 	}
 
-
 }
 
 function touchControls(lineAngle){
@@ -1505,7 +1510,6 @@ function touchControls(lineAngle){
 
 
 	}
-
 
 }
 
@@ -1556,6 +1560,7 @@ function updateBallVelocity(){
 	Block
 
 	A square sprite with static collider physics placed at a position and may be moved.
+	When moved it can also behave as a powerup with dynamic physics and tween storage.
 
 */
 
@@ -1566,27 +1571,36 @@ var Block = (
 		//Constructor, Specify starting color.
 		function Block(color){
 
+			//Position parameters.
 			this.x = 0;
 			this.y = 0;
 
+			//Store the width of the block.
 			this.width = 0;
 			this.height = 0;
 
+			//Color of the block (used to choose sprite).
 			this.color = color.toLowerCase();
 
+			//Choose the sprite for this block.
 			this.sprite = game.add.sprite(this.x, this.y, this.color.concat("block"));
 
+			//Adjust sprite width to default size.
 			this.sprite.width = blockSize;
 			this.sprite.height = blockSize;
 
+			//Set width of block to sprite width.
 			this.width = this.sprite.width;
 			this.height = this.sprite.height;
 
+			//Whether the block has an absolute position or not.
 			this.absolute = false;
 
+			//Whether block is alive and whether it is a powerup.
 			this.blockAlive = true;
 			this.powerup = false;
 
+			//Initialise block physics and assign a body.
 			initBlockPhysics(this.sprite);
 
 		}
@@ -1595,18 +1609,22 @@ var Block = (
 		//Private function to define block static physics.
 		var initBlockPhysics = function(sprite){
 
+			//Enable physics on block sprite.
 			game.physics.p2.enable(sprite);
 
+			//Allow sleeping body.
 			sprite.body.allowSleep = true;
-			
+				
+			//Setup body to correcr size, blocks are static.
 			sprite.body.setRectangle(sprite.width, sprite.height, 0, 0, 0);
 			sprite.body.x = this.x;
 			sprite.body.y = this.y;
 			sprite.body.static = true;
 
-
+			//Set body type to P2.
 			sprite.physicsBodyType = Phaser.Physics.P2JS;
 
+			//Add body to block collision group and allow collisions with appropriate groups.
 			sprite.body.setCollisionGroup(blockCollisionGroup);
 			sprite.body.collides(ballCollisionGroup);
 			sprite.body.collides(paddleCollisionGroup, collectPowerup, this);
@@ -1619,18 +1637,19 @@ var Block = (
 		//Set the block at a position.
 		Block.prototype.setPos = function(x, y){
 
+		//Adjust block absolute position.
 		this.x = x;
 		this.y = y;
 
+		//Change body position accordingly.
 		this.sprite.body.x = x;
 		this.sprite.body.y = y;
-
-
 		
 		};
 
 		Block.prototype.setDormant = function(){
 
+			//Block is not alive whilst dormant and body is sleeping.
 			this.blockAlive = false;
 			this.sprite.body.sleepMode = p2.World.BODY_SLEEPING;
 
@@ -1645,6 +1664,7 @@ var Block = (
 
 		Block.prototype.getBody = function(){
 
+			//Return the block's body.
 			return this.sprite.body;
 
 		};
@@ -1652,10 +1672,11 @@ var Block = (
 		//Make this block dissapear.
 		Block.prototype.destroy = function(){
 
+			//Block has been destroyed, set as invisible and not alive.
 			this.sprite.visible = false;
-
 			this.blockAlive = false;
 
+			//Remove body to avoid physical interactions.
 			this.sprite.body.removeFromWorld();
 			this.sprite.body.sleepMode = p2.World.BODY_SLEEPING;
 
@@ -1663,19 +1684,20 @@ var Block = (
 
 		Block.prototype.hide = function(){
 
+			//Block is hidden, stop physical interaction temporarily.
 			this.sprite.visible = false;
 			this.sprite.body.removeFromWorld();
-
-			//this.sprite.body.sleepMode = p2.World.BODY_SLEEPING;
 
 		}
 
 		//Make this block appear.
 		Block.prototype.show = function(){
 
+			//Set sprite to visible and alive.
 			this.sprite.visible = true;
 			this.sprite.alive = true;
 
+			//Block is also alive and add body back to world.
 			this.blockAlive = true;
 			this.sprite.body.addToWorld();
 
@@ -1684,36 +1706,42 @@ var Block = (
 
 		Block.prototype.makeAbsolute = function(abs){
 
+			//Change absolute state.
 			this.absolute = abs;
 
 		};
 
 		Block.prototype.isAbsolute = function(){
 
+			//Return whether the block is absolute.
 			return this.absolute;
 
 		}
 
 		Block.prototype.isAlive = function(){
 
+			//Return whether the block is alive.
 			return this.blockAlive;
 
 		}
 
 		Block.prototype.storeTween = function(tween){
 
+			//Store a single tween for this block.
 			this.tween = tween;
 
 		}
 
 		Block.prototype.getTween = function(){
 
+			//Return this block's current tween.
 			return this.tween;
 
 		}
 
 		Block.prototype.markPowerup = function(type){
 
+			//Mark this block with a powerup type and as a powerup.
 			this.powerupType = type;
 			this.powerup = true;
 
@@ -1721,12 +1749,14 @@ var Block = (
 
 		Block.prototype.getPowerup = function(){
 
+			//Return the type of powerup this block is.
 			return this.powerupType;
 
 		}
 
 		Block.prototype.isPowerup = function(){
 
+			//Return whether this block is a powerup or not.
 			return this.powerup;
 
 		}
@@ -1735,6 +1765,7 @@ var Block = (
 
 
 	}()
+
 );
 
 
@@ -1829,18 +1860,32 @@ var Level = (
 
 		function Level(name){
 
+			//Array to store blocks.
 			this.blocks = new Array();
-			this.name = name;
-			this.zeroPos = {x: 0, y: 0};
-			this.size = 0;
+			
+			//Array to store block's positions.
 			this.blockPositions = new Array();
+
+			//Level name.
+			this.name = name;
+
+			//Top left corner of level for local coordinate system.
+			this.zeroPos = {x: 0, y: 0};
+
+			//SIze of the level in pixels.
+			this.size = 0;
+
+			//Track how many blocks are left in this level.
 			this.blocksLeft = 0;
+
+			//Whether this level is alive or not.
 			this.alive = true;
 
 		}
 
 		Level.prototype.getName = function(){
 
+			//Return the name of this level.
 			return this.name;
 
 		}
@@ -1848,13 +1893,17 @@ var Level = (
 		//Updates the origin co-ordinate of the Level space.
 		Level.prototype.updatePosition = function(center, radius, buffer, checkOutOfBounds){
 
+			//Work out length of the side of the level (square so same in x & y).
 			var sideLength = (Math.sin(Math.PI / 4) * (radius * 2)) - buffer;
 
+			//Work out zero position from centre of screen so level is centered.
 			this.zeroPos.x = center.x - (sideLength / 2);
 			this.zeroPos.y = center.y - (sideLength / 2);
 
+			//Store level size.
 			this.size = sideLength;
 
+			//Adjust blocks positions to local coordinates if there are blocks left.
 			if(this.blocks.length > 0){
 
 				blocksToBounds(this.blocks, this.blockPositions, this.zeroPos, this.size, checkOutOfBounds);
@@ -1866,35 +1915,45 @@ var Level = (
 		//Add blocks to the Level container. Also is able to dissassemble BlockLines into Blocks.
 		Level.prototype.addBlocks = function(blockObj){
 
+			//Import a block.
 			if(blockObj instanceof Block){
 
-
+				//Add block to array.
 				this.blocks.push(blockObj);
 
+				//Check if the block is absolute.
 				if(!blockObj.isAbsolute()){
 
+					//Push block onto coordinate system.
 					this.blockPositions.push({ x: blockObj.getPos().x * blockSize, y: blockObj.getPos().y * blockSize });
 
 				}
 				else{
 
+					//Push block with absolute offset.
 					this.blockPositions.push({x: blockObj.getPos().x, y: blockObj.getPos().y});
 
 				}
 
+				//Add one to num of blocks left.
 				this.blocksLeft++;
 
 			}
-			else if(blockObj instanceof BlockLine){
+			else if(blockObj instanceof BlockLine){		//Import a blockline.
 
+				//Iterate individual blockline blocks.
 				for(var i = 0; i < blockObj.getLength(); i++){
 
+					//Create a block.
 					var block = blockObj.getBlock(i);
 
+					//Add block to array.
 					this.blocks.push(block);
 
+					//Push absolute position as blockline is always non absolute.
 					this.blockPositions.push({x: block.getPos().x, y: block.getPos().y});
 
+					//Add to blocks left to track.
 					this.blocksLeft++;
 
 				}
@@ -1908,22 +1967,27 @@ var Level = (
 
 		Level.prototype.numBlocksLeft = function(){
 
+			//Return the number of blocks left in the level.
 			return this.blocksLeft;
 
 		};
 
 		Level.prototype.blockHit = function(){
 
+			//Reduce number of blocks left as a block has been hit.
 			this.blocksLeft--;
 
 		}
 
 		Level.prototype.getBlock = function(id){
 
+			//Get a specific block via it's body id.
 			for(var i = 0; i < this.blocks.length; i++){
 
+				//Check id matches a block body.
 				if(this.blocks[i].getBody().id == id){
 
+					//Return the matched block and stop iterating.
 					return this.blocks[i];
 
 				}
@@ -1934,19 +1998,25 @@ var Level = (
 
 		Level.prototype.deactivateBlock = function(id){
 
+			//Variable to deactivate all blocks.
 			var allBlocks = false;
 
+			//Check if id says all blocks.
 			if(id == "all"){
 
+				//If so, set all blocks to true.
 				id = null;
 				allBlocks = true;
 
 			}
 
+			//Iterate blocks array.
 			for(var i = 0; i < this.blocks.length; i++){
 
+				//Check if all blocks are to be hidden or a specific id matches.
 				if(allBlocks == true || this.blocks[i].getBody().id == id){
 
+					//Set matching block(s) to dormant state.
 					this.blocks[i].setDormant();
 
 				}
@@ -1957,16 +2027,19 @@ var Level = (
 
 		Level.prototype.setVisibility = function(visibility, force){
 
+			//Iterate through all blocks.
 			for(var i = 0; i < this.blocks.length; i++){
 
-
+				//If level is visible and this block is alive or blocks are forced to be visible.
 				if(visibility && (this.blocks[i].isAlive() || force)){
 
+					//Show matching block.
 					this.blocks[i].show();
 
 				}
 				else{
 
+					//Otherwise block should be hidden.
 					this.blocks[i].hide();
 
 				}
@@ -1977,8 +2050,10 @@ var Level = (
 
 		Level.prototype.checkBlocksInWorld = function(){
 
+			//Iterate throught blocks array.
 			for(var i = 0; i < this.blocks.length; i++){
 
+				//Check if block is outside of level.
 				if(
 					this.blocks[i].getPos().x < 0 ||
 					this.blocks[i].getPos().x > game.world.width ||
@@ -1986,6 +2061,7 @@ var Level = (
 					this.blocks[i].getPos().y > game.world.height
 					)
 
+					//Set to dormant state if so.
 					this.blocks[i].setDormant();
 
 			}
@@ -1995,18 +2071,20 @@ var Level = (
 		//Brings all blocks to the Level bounds space.
 		var blocksToBounds = function(blocks, blockPositions, zeroPos, size, checkOutOfBounds){
 
-
+			//Iterate through all blocks.
 			for(var i = 0; i < blocks.length; i++){
 
+				//Check if a block is alive.
 				if(blocks[i].isAlive()){
 
+					//If so, move to appropriate block position in local coord system.
 					blocks[i].setPos(zeroPos.x + blockPositions[i].x, zeroPos.y + blockPositions[i].y);
 
 				}
 
 			}
 
-
+			//If checking out of bounds blocks.
 			if(checkOutOfBounds){
 
 				checkBlocks(blocks, zeroPos, size);
@@ -2018,6 +2096,7 @@ var Level = (
 		//Check if the Block at the passed index is out of bounds (Level Space).
 		var outOfBounds = function(index, blocks, zeroPos, size){
 
+			//Check if block position is outside of local bounds.
 			if(
 
 				(blocks[index].getPos().x > (zeroPos.x + size + blockSize)) || 
@@ -2025,10 +2104,12 @@ var Level = (
 
 				){
 
+				//If so, return true.
 				return true;
 
 			}
 
+			//If not, return false.
 			return false;
 
 
@@ -2037,17 +2118,19 @@ var Level = (
 		//Check for all out of bounds blocks.
 		var checkBlocks = function(blocks, zeroPos, size){
 
+			//Iterate through all blocks.
 			for(var i = 0; (i < blocks.length); i++){
 
-				if(outOfBounds(i, blocks, zeroPos, size) && blocks[i].isAlive()){	
+				//Check if this block id out of bounds and alive.
+				if(outOfBounds(i, blocks, zeroPos, size) && blocks[i].isAlive()){
 
-					console.log("hide");
-
+					//If so, destroy the block.
 					blocks[i].destroy();
 
 				}
 				else if(blocks[i].isAlive()){
 
+					//If not and block is alive, show the block.
 					blocks[i].show();
 
 
@@ -2056,7 +2139,6 @@ var Level = (
 			}
 
 		};
-
 
 
 		return Level;
@@ -2069,32 +2151,36 @@ var Level = (
 
 function Button(x, y, xSize, ySize, name){
 
+	//Set position of this button.
 	this.x = x;
 	this.y = y;
 	
+	//Add a button object.
 	this.button = game.add.button(x, y, 'button', buttonSelect, this, 2, 1, 0);
 	this.button.anchor.setTo(0.5, 0.5);
 	this.button.scale.setTo(2, 2);
 
+	//Set the name of this button.
 	this.button.name = name;
 
+	//button should be visible.
 	this.isVisible = true;
 
 }
 
+//Add text to the button so user knows it's function.
 Button.prototype.addText = function(text){
-
 
 	this.text = game.add.text(this.x, this.y, text, { font: "30px Bauhaus 93", fill: "#4fa" } );
 	this.text.anchor.setTo(0.5, 0.5);
 
 }
 
+//Remove button temporarily.
 Button.prototype.remove = function(){
 
 	this.button.visible = false;
 	this.text.visible = false;
-
 
 }
 
