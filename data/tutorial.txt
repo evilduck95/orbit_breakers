@@ -1,9 +1,9 @@
-How to play
-
 Your goal is to use the ball to destroy all the blocks on screen.
 
 Use your mouse to move the paddle around a circle on screen. 
 Keep the ball inside the level and destroy all blocks using the paddle.
 
-When a powerup spawns (Yellow Block), you can collect it with your paddle, 
-this will provide a second paddle to help you keep the ball in the level.
+Click the mouse to stop the paddle and aim it to control the ball.
+
+When a powerup spawns (Yellow Blocks), you can collect it with your paddle, 
+this will give you a powerup that will help you to win the game!

@@ -89,6 +89,8 @@ function preload() {
 		Load in all visual assets.
 	*/
 
+	game.load.image('cursor', 'assets/visual/cursor.png');
+
 	//Player paddle and ball.
 	game.load.image('paddle', 'assets/visual/paddle(sprite).png');
 	game.load.image('ball', 'assets/visual/ball.png');
@@ -99,6 +101,9 @@ function preload() {
 	game.load.image('greenblock', 'assets/visual/block(green).png');
 	game.load.image('blueblock', 'assets/visual/block(blue).png');
 	game.load.image('yellowblock', 'assets/visual/block(yellow).png');
+
+	game.load.image('lifeblock', 'assets/visual/block(life).png');
+	game.load.image('paddleblock', 'assets/visual/block(paddle).png');
 
 	game.load.image('spark', 'assets/visual/spark.png');
 
@@ -120,6 +125,10 @@ function preload() {
 	game.load.audio('beep', 'assets/sound/beep.mp3');
 	game.load.audio('powerup', 'assets/sound/pwrup.mp3');
 	game.load.audio('lost', 'assets/sound/lost.mp3');
+
+	game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+	game.scale.pageAlignHorizontally = true;
+	game.scale.pageAlignVertically = true;
 
 }
 
@@ -203,7 +212,7 @@ function create() {
 		paddleRunRadius = $(window).height() / 3;
 
 	}
-	blockSize = ((Math.sin(Math.PI / 4) * (paddleRunRadius * 2)) - levelBuffer) / 12;
+	//blockSize = ((Math.sin(Math.PI / 4) * (paddleRunRadius * 2)) - levelBuffer) / 12;
 
 
 
@@ -219,6 +228,8 @@ function create() {
 		game.input.addPointer();
 
 	}
+
+	game.input.useCrosshair = true;
 
 	//Add mouse events to game on mouse up.
 	game.input.onUp.add(function(pointer){ mouseUpEvents(pointer, null); }, this);
@@ -280,6 +291,7 @@ function createObj(){
 	centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
 	mousePoint = new Phaser.Point();
 
+
 	//Add a background image, anchor from center.
 	backgroundImage = game.add.sprite(0, 0, 'background');
 	backgroundImage.anchor.setTo(0.5, 0.5);
@@ -300,8 +312,7 @@ function createObj(){
 
 	//Load in ball asset at center.
 	ball = game.add.sprite(0, 0, 'ball');
-	mousePointer = game.add.sprite(0, 0, 'ball');
-	mousePointer.anchor.setTo(0.5, 0.5);
+
 	//Set ball to global size.
 	ball.width = ball.height = ballSize;
 
@@ -444,8 +455,6 @@ function createMenus() {
 //Function called on every update frame.
 function update() { 
 
-	mousePointer.x = mousePoint.x;
-	mousePointer.y = mousePoint.y;
 
 	emitter.x = ball.x;
 	emitter.y = ball.y;
@@ -456,6 +465,10 @@ function update() {
 
 		bgMusic.pause();
 
+		ball.body.x = game.width / 2;
+		ball.body.y = game.height * 0.2;
+		
+		ballWander(1000);
 
 		//Have levels ready but not visible as soon as they have been loaded from their file.
 		if(typeof levels[currentLevel] != "undefined"){
@@ -463,7 +476,10 @@ function update() {
 			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
 			levels[currentLevel].setVisibility(false);
 			
+
 		}
+
+		
 
 	}
 	else if(menuStages.endGame){
@@ -478,7 +494,10 @@ function update() {
 	}
 	else if(menuStages.levelFinish){
 
-		//game.paused = true;
+		//Make ball wander randomly.
+		ballWander(500, true);
+		
+		
 
 	}
 	else if(menuStages.fail){
@@ -506,6 +525,22 @@ function update() {
 			bgMusic.play();
 
 		}
+
+		if(ball.wandering && ball.body.velocity.x < -5 && ball.body.velocity.x > 5 
+			&& ball.body.velocity.y < 1){
+
+			ballWander(500);
+
+		}
+		else if(ball.wandering){
+
+			ball.body.velocity.x = 0;
+			ball.body.velocity.y = 0;
+
+			ball.wandering = false;
+
+		}
+
 
 		//Update HUD on every frame.
 		hud.levelName.text = levels[currentLevel].getName();
@@ -818,7 +853,7 @@ function resizeGame() {
 	console.log("Resizing to", windowWidth, "x", windowHeight);
 
 	//Scale the game to the new size.
-	game.scale.setGameSize(windowWidth, windowHeight);
+	//game.scale.setGameSize(windowWidth, windowHeight);
 
 	//Anchor the background at the center and move it to the center.
 	backgroundImage.anchor.setTo(0.5, 0.5);
@@ -945,11 +980,8 @@ function mouseUpEvents(pointer){
 		resizeGame();
 
 		//Unpause in case menu was exited
-		if(game.paused){
+		game.paused = false;
 
-			game.paused = false;
-
-		}
 
 	}
 	
@@ -968,6 +1000,7 @@ function mouseUpEvents(pointer){
 
 		game.scale.startFullScreen(false);
 		resizeGame();
+		pauseGame();
 
 
 	}
@@ -975,6 +1008,11 @@ function mouseUpEvents(pointer){
 
 		//Show user how to go fullscreen in case they wanted to.
 		showFullscreenText();
+
+	}
+	else if(!doubleClick && game.scale.isFullScreen){
+
+		unPauseGame();
 
 	}
 
@@ -1013,7 +1051,14 @@ function toggleMute(){
 }
 
 
+//Key and mouse button press events.
 $(document).ready(function(event){
+
+	$(document).contextmenu(function(event){
+
+		game.paused = true;
+
+	});
 
 	//Pause/unpause game when Escape key is pressed.
 	$(document).keyup(function(event){
@@ -1064,7 +1109,12 @@ $(document).ready(function(event){
 	//Pause and resize game when window is resized.
 	$(window).on('resize', function(event){
 
-		pauseGame();
+		if(!game.scale.isFullScreen){
+			
+			pauseGame();
+
+		}
+
 		resizeGame();	
 
 	});
@@ -1096,8 +1146,7 @@ $(document).ready(function(event){
 
 function hitBlock(body1, body2){
 
-	//Generate random chance number.
-	var rnd = game.rnd.frac();
+	console.log("here");
 
 	//Standard blocks are static.
 	body2.static = false;
@@ -1106,7 +1155,7 @@ function hitBlock(body1, body2){
 	var blockHit = levels[currentLevel].getBlock(body2.id);
 
 	//If undefined, it has already been hit.
-	if(typeof blockHit == "undefined" || blockHit.isPowerup()){
+	if(typeof blockHit == "undefined"){
 
 		return;
 
@@ -1114,48 +1163,50 @@ function hitBlock(body1, body2){
 
 	//Set the block as dormant (no physics).
 	blockHit.setDormant();
-
 	blockHit.explode();
+
+	console.log(blockHit.isPowerup());
+
+
 	
 	//15% chance to spawn a powerup.
-	if(rnd >= 0.85){
+	if(blockHit.isPowerup()){
 
 		//Powerups are dynamic colliders and the new sprite should be visible.
 		body2.dynamic = true;
 		body2.sprite.visible = false;
 
-		//Generate a new random number for powerup choosing.
-		rnd = game.rnd.frac();
+		console.log(blockHit.getColor());
+		
+		body2.sprite = null;
 
-		//7.5% chance to spawn a paddle powerup.
-		if(rnd >= 0.5){
+		//.
+		if(blockHit.getColor() == "life"){
 
 			//Spawn a paddle powerup!
-			body2.sprite = game.add.sprite(body2.x, body2.y, 'yellowblock');
-			body2.sprite.width = blockSize;
-			body2.sprite.height = blockSize;
+			body2.sprite = game.add.sprite(body2.x, body2.y, 'lifeblock');
 
-			blockHit.markPowerup("paddle");
+			blockHit.markPowerup("life");
 
 		}
 		else {	//7.5% chance to spawn a life.
 
 			//Spawn an extra life powerup!
-			body2.sprite = game.add.sprite(body2.x, body2.y, 'redblock');
-			body2.sprite.width = blockSize;
-			body2.sprite.height = blockSize;
+			body2.sprite = game.add.sprite(body2.x, body2.y, 'paddleblock');
 
-			blockHit.markPowerup("life");
+			blockHit.markPowerup("paddle");
 
 		}
 
 		body2.sprite.visible = true;
+		body2.sprite.width = blockSize;
+		body2.sprite.height = blockSize;
 
 		//All powerups have a constant tween.
 		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 500, Phaser.Easing.Linear.None, true, 0, 100, true));
 
 		//Log that a powerup has spawned.
-		console.log("Powerup Spawned!");
+		console.log("Powerup Hit!");
 
 	}
 	else{	//If not a powerup, create a standard fly-off block.
@@ -1267,10 +1318,7 @@ function checkBallOutOfBounds(){
 	//If the ball is outside the game world and player is not in a menu.
 	if(
 
-		ball.body.x < 0 ||
-		ball.body.x > game.width ||
-		ball.body.y < 0 ||
-		ball.body.y > game.height 
+		outOfBounds(ball)
 
 		&&
 
@@ -1299,6 +1347,24 @@ function checkBallOutOfBounds(){
 		}
 
 	}
+
+}
+
+function outOfBounds(sprite){
+
+	if(
+			sprite.body.x < 0 ||
+			sprite.body.x > game.width ||
+			sprite.body.y < 0 ||
+			sprite.body.y > game.height 
+
+		){
+
+		return true;
+
+	}
+
+	return false
 
 }
 
@@ -1366,11 +1432,11 @@ function buttonSelect(button){
 			menuStages.tutorial = true;
 
 			//Setup buffer for text.
-			var widthBuffer = game.width * 0.2;
-			var heightBuffer = game.height * 0.3;
+			var widthBuffer = game.width * 0.5;
+			var heightBuffer = game.height * 0.5;
 
 			//Add text from text file to tutorial menu.
-			tutorialScreen.addText(tutorialText, widthBuffer, heightBuffer, game.width - (widthBuffer * 2), game.height - (heightBuffer * 2));
+			tutorialScreen.addText(tutorialText, game.width * 0.15, game.height * 0.15, game.width - (game.width * 0.2), game.height - (game.height * 0.2));
 
 			//Make tutorial menu visible.			
 			mainMenu.setVisibility(false);
@@ -1596,13 +1662,14 @@ function paddleMove(paddleBody, lineAngle){
 	if(controlMethod.leapMotion && typeof leftHand != "undefined"){
 
 		//Rotate paddle according to the rotation of the Left Hand mapped to a 180 degree (-PI/2 - PI/2) range.
-		paddle.body.rotation = leftHand.roll().map(-1, 1, -Math.PI / 2, Math.PI / 2);
+		paddleBody.body.rotation = leftHand.roll().map(-1, 1, -Math.PI / 2, Math.PI / 2);
 
 	}
 	else{
 
 		//Rotate paddle so it always faces center.
-		paddle.body.rotation = lineAngle;
+		paddleBody.body.rotation = lineAngle;
+
 
 	}
 
@@ -1611,8 +1678,8 @@ function paddleMove(paddleBody, lineAngle){
 function resetBall(){
 
 	//Move ball to near corner.
-	ball.body.x = (game.width / 2) - (levelBuffer * 2);
-	ball.body.y = (game.height / 2) - (levelBuffer * 2);
+	ball.body.x = (game.width / 2);
+	ball.body.y = (game.height * 0.2);
 
 	//Send ball at level.
 	ball.body.velocity.x = 0;
@@ -1758,6 +1825,25 @@ function updateBallVelocity(){
 
 }
 
+function ballWander(radius, random){
+
+	ball.kinematic = true;
+
+	ball.body.velocity.x = Math.sin(2*Math.PI * (game.time.now / 2000)) * radius;
+	ball.body.velocity.y = Math.cos(2*Math.PI * (game.time.now / 2000)) * radius;
+	
+	ball.wandering = true;
+
+	
+	if(outOfBounds(ball)){
+
+		ball.body.velocity *= -1;
+		sounds.pop.play();
+
+	}
+
+}
+
 
 
 /*	Block
@@ -1801,7 +1887,17 @@ var Block = (
 
 			//Whether block is alive and whether it is a powerup.
 			this.blockAlive = true;
-			this.powerup = false;
+
+			if(color == "life" || color == "paddle"){
+				
+				this.powerup = true;
+
+			}
+			else{
+
+				this.powerup = false;
+
+			}
 
 			//Initialise block physics and assign a body.
 			initBlockPhysics(this.sprite);
@@ -1894,7 +1990,15 @@ var Block = (
 			this.emitter.start(true, 4000, null, 10);
 
 			game.add.tween(this.emitter).to({ alpha:0 }, 3000, "Linear", true);
-			game.time.events.add(Phaser.Timer.SECOND * 3, function(){this.emitter.destroy()}, this);
+			game.time.events.add(Phaser.Timer.SECOND * 3, function(){
+
+				if(this.emitter != null){
+
+					this.emitter.destroy();
+
+				}
+
+			}, this);
 
 		}
 
@@ -1954,6 +2058,12 @@ var Block = (
 
 			//Return this block's current tween.
 			return this.tween;
+
+		}
+
+		Block.prototype.getColor = function(){
+
+			return this.color;
 
 		}
 
@@ -2099,6 +2209,12 @@ var Level = (
 
 			//Return the name of this level.
 			return this.name;
+
+		}
+
+		Level.prototype.getSize = function(){
+
+			return this.size;
 
 		}
 
@@ -2447,6 +2563,16 @@ Button.prototype.getText = function(){
 
 }
 
+
+
+
+/*	Menu
+
+	Defines a container for a title and an unlimited number
+ 	of buttons and text. Also adds text to buttons via the Button Class.
+
+*/
+
 function Menu(title){
 
 	//Set the title string to appear at the top of the menu screen, anchor the title in its relative centre.
@@ -2458,13 +2584,6 @@ function Menu(title){
 	this.texts = new Array();
 
 }
-
-/*	Menu
-
-	Defines a container for a title and an unlimited number
- 	of buttons and text. Also adds text to buttons via the Button Class.
-
-*/
 
 Menu.prototype.addButton = function(x, y, text, id){
 
@@ -2543,3 +2662,4 @@ Menu.prototype.changeText = function(buttonName, newText){
 	}
 
 }
+

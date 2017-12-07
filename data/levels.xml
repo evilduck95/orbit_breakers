@@ -12,7 +12,7 @@
 	<level id="1" name="A Single Block">
 		
 		<block absolute="false">
-			<color>blue</color>
+			<color>life</color>
 			<x>9</x>
 			<y>7</y>
 
@@ -78,6 +78,17 @@
 
 		</blockLine>
 
+		<block>
+			
+			<position>
+				<x>6</x>
+				<y>6</y>
+			</position>
+
+			<color>paddle</color>
+
+		</block>
+
 	</level>
 
 
@@ -86,7 +97,7 @@
 
 		<block absolute="false">
 
-			<color>red</color>
+			<color>paddle</color>
 
 			<x>7</x>
 			<y>7</y>
