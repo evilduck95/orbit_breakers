@@ -473,12 +473,8 @@ function createMenus() {
 //Function called on every update frame.
 function update() { 
 
-	menuStages.game = false;
-	menuStages.endGame = true;
-
 	emitter.x = ball.x;
 	emitter.y = ball.y;
-
 
 	//Change function of update based on games current stage.
 	if(menuStages.main || menuStages.options || menuStages.tutorial){
