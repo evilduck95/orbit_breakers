@@ -80,9 +80,27 @@ Number.prototype.map = function(inMin, inMax, outMin, outMax){
 
 }
 
+WebFontConfig = {
+
+	active: function(){
+
+		game.time.events.add(Phaser.Timer.SECOND, create, this);
+
+	},
+
+	google: {
+
+		families: ['Barlow Condensed']
+
+	}
+
+};
+
 //Function for Preloading all asset files.
 function preload() {
 	
+	game.load.script('webfont', '//ajax.googleapis.com/ajax/libs/webfont/1.4.7/webfont.js');
+
 	controllerSetup();
 
 	/*
@@ -455,6 +473,8 @@ function createMenus() {
 //Function called on every update frame.
 function update() { 
 
+	menuStages.game = false;
+	menuStages.endGame = true;
 
 	emitter.x = ball.x;
 	emitter.y = ball.y;
@@ -484,12 +504,10 @@ function update() {
 	}
 	else if(menuStages.endGame){
 
-		//Show end screen and add credits to menu.
-		endGameScreen.setVisibility(true);
-		console.log("text", creditText);
-		endGameScreen.addText(creditText, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
-
-
+		
+			//Show end screen and add credits to menu.
+			endGameScreen.setVisibility(true);
+			endGameScreen.addText(creditText, game.width * 0.5, game.height * 0.9);
 
 	}
 	else if(menuStages.levelFinish){
@@ -1436,7 +1454,7 @@ function buttonSelect(button){
 			var heightBuffer = game.height * 0.5;
 
 			//Add text from text file to tutorial menu.
-			tutorialScreen.addText(tutorialText, game.width * 0.15, game.height * 0.15, game.width - (game.width * 0.2), game.height - (game.height * 0.2));
+			tutorialScreen.addText(tutorialText, game.width * 0.55, game.height * 0.55);
 
 			//Make tutorial menu visible.			
 			mainMenu.setVisibility(false);
@@ -2635,11 +2653,20 @@ Menu.prototype.setVisibility = function(visibility){
 
 }
 
-Menu.prototype.addText = function(text, x, y, dx, dy){
+Menu.prototype.addText = function(text, x, y){
 
 	//Create a new text string and set its bounds according to parameters.
-	var newText = game.add.text(0, 0, text, { font: "20px Courier New", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle"});
-	newText.setTextBounds(x, y, dx, dy);
+	var newText = game.add.text(0, 0, text, { fill: "#FFF" });
+	newText.anchor.setTo(0.5, 0.5);
+	newText.x = x;
+	newText.y = y;
+
+	newText.font = 'Barlow Condensed';
+	newText.weight = 'light';
+	newText.fontSize = 20;
+	//newText.stroke = '#000000';
+
+
 
 	//Add this text to the array.
 	this.texts.push(newText);
