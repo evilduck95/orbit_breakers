@@ -74,6 +74,8 @@ var fullscreenText, pauseText;
 //Container for all sounds.
 var sounds;
 
+var timer = 0
+
 Number.prototype.map = function(inMin, inMax, outMin, outMax){
 
 	return ((this - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
@@ -389,8 +391,9 @@ function createMenus() {
 
 	//Create options menu for settings manipulation.
 	optionsMenu = new Menu("Game Options");
-	optionsMenu.addButton(game.width / 2, game.height / 2, "Sound", "togglesound");
-	optionsMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "Back", "mainmenu");
+	optionsMenu.addButton(game.width / 3, game.height / 2, "Sound", "togglesound");
+	optionsMenu.addButton(game.width * (2 / 3), game.height / 2, "Credits", "credits");
+	optionsMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "Back", "back");
 	optionsMenu.addButton(game.width / 3, game.height * (2 / 3), "Clear Save", "clearsaves");
 
 	optionsMenu.setVisibility(false);
@@ -413,8 +416,15 @@ function createMenus() {
 	endGameScreen = new Menu("You have Completed Orbit Breakers!");
 	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
 
+	endGameScreen.setVisibility(false);
+
+	creditsScreen = new Menu("Game Credits");
+	creditsScreen.addButton(game.width / 2, game.height * (2 / 3), "Back", "back");
+
+	creditsScreen.setVisibility(false);
+
 	tutorialScreen = new Menu("How to Play");
-	tutorialScreen.addButton(game.width / 2, game.height - 200, "Back", "mainmenu");
+	tutorialScreen.addButton(game.width / 2, game.height - 200, "Back", "back");
 
 	tutorialScreen.setVisibility(false);
 
@@ -492,10 +502,29 @@ function update() {
 
 
 	}
+	else if(menuStages.credits){
+
+		creditsScreen.setVisibility(true);
+		creditsScreen.addText(creditText, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
+
+	}
 	else if(menuStages.levelFinish){
 
+
+		if(!ball.wondering){
+
 		//Make ball wander randomly.
-		ballWander(500, true);
+			ballFollow({x: game.width / 2, y: game.height * 0.2}, 200);
+
+		}
+		if(ball.body.y < game.height * 0.25){
+
+			ballWander(50);
+
+		}
+		
+
+
 		
 		
 
@@ -525,14 +554,7 @@ function update() {
 			bgMusic.play();
 
 		}
-
-		if(ball.wandering && ball.body.velocity.x < -5 && ball.body.velocity.x > 5 
-			&& ball.body.velocity.y < 1){
-
-			ballWander(500);
-
-		}
-		else if(ball.wandering){
+		if(ball.wandering){
 
 			ball.body.velocity.x = 0;
 			ball.body.velocity.y = 0;
@@ -897,16 +919,26 @@ function resizeGame() {
 //Temporarily show fullscreen text.
 function showFullscreenText(){
 
-	//After 500ms show a sliding text informing the user on how to go fullscreen.
-	game.time.events.add(500, function(){
 
-				fullscreenText.alpha = 1;	
-				fullscreenText.y = 0			
-				game.add.tween(fullscreenText).to({y: game.height / 2}, 1500, Phaser.Easing.Linear.None, true);
-				game.add.tween(fullscreenText).to({alpha: 0}, 1500, Phaser.Easing.Linear.None, true);
+	console.log(game.time.now, timer, game.time.now - timer);
+
+	if(game.time.now - timer > 5000){
+
+		timer = game.time.now;
 
 
-			}, this);
+		//After 500ms show a sliding text informing the user on how to go fullscreen.
+		game.time.events.add(500, function(){
+
+					fullscreenText.alpha = 1;	
+					fullscreenText.y = 0			
+					game.add.tween(fullscreenText).to({y: game.height / 2}, 1500, Phaser.Easing.Linear.None, true);
+					game.add.tween(fullscreenText).to({alpha: 0}, 1500, Phaser.Easing.Linear.None, true);
+
+
+				}, this);
+
+	}
 
 }
 
@@ -1284,6 +1316,8 @@ function collectPowerup(body1, body2){
 
 	}
 
+	blockHit.kinematic = true;
+
 	//Ensure powerup block will not interact anymore.
 	blockHit.setDormant();
 
@@ -1468,17 +1502,41 @@ function buttonSelect(button){
 
 		break;
 
-		case "mainmenu":
+		case "credits":
 
-			//Main menu state.
-			menuStages.options = false;
-			menuStages.main = true;
-			menuStages.game = false;
-
-			//Show main menu.
 			optionsMenu.setVisibility(false);
-			tutorialScreen.setVisibility(false);
-			mainMenu.setVisibility(true);
+
+			menuStages.options = false;
+			menuStages.credits = true;
+
+		break;
+
+		case "back":
+
+			//Credits menu has a special back button.
+			if(!menuStages.credits){
+
+				//Main menu state.
+				menuStages.main = true;
+				menuStages.game = false;
+				menuStages.options = false;
+
+				//Show main menu.
+				optionsMenu.setVisibility(false);
+				tutorialScreen.setVisibility(false);
+				creditsScreen.setVisibility(false);
+				mainMenu.setVisibility(true);
+
+			}
+			else{
+
+				menuStages.credits = false;
+				menuStages.options = true;
+
+				creditsScreen.setVisibility(false);
+				optionsMenu.setVisibility(true);
+
+			}
 
 
 		break;
@@ -1825,7 +1883,7 @@ function updateBallVelocity(){
 
 }
 
-function ballWander(radius, random){
+function ballWander(radius){
 
 	ball.kinematic = true;
 
@@ -1834,13 +1892,17 @@ function ballWander(radius, random){
 	
 	ball.wandering = true;
 
+}
+
+function ballFollow(target, speed){
 	
-	if(outOfBounds(ball)){
+	//Soft follow based on angle to target.
+	var angle = Math.atan2(target.y - ball.body.y, target.x - ball.body.x);
 
-		ball.body.velocity *= -1;
-		sounds.pop.play();
+	//Edit velocity based on angle to follow target.
+	ball.body.velocity.x = Math.cos(angle) * speed;
+	ball.body.velocity.y = Math.sin(angle) * speed;
 
-	}
 
 }
 
@@ -2100,7 +2162,7 @@ var Block = (
 /*	Blockline
 
 	Defines a container object able to encompass many Blocks, 
-	makes for easier programming of many Blocks.
+	makes for easier defining of many Blocks.
 
 */
 
@@ -2153,7 +2215,7 @@ function BlockLine(startPos, direction, numOfBlocks, color){
 	}
 
 }
-
+s
 //Returns the block instance at the index in the parameter.
 BlockLine.prototype.getBlock = function(index){
 
