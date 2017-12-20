@@ -1,9 +1,9 @@
 
 
-var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, 'game-space', { preload: preload, create: create, update: update });
-	console.log(window.devicePixelRatio);
+var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, 'game-space', { preload: preload, create: create, update: update }, false, true);
 
-	//Import Javascript sounds. Imported here because they need to play whilst the game is paused.
+
+//Import Javascript sounds. Imported here because they need to play whilst the game is paused.
 var bgMusic = new Audio('assets/sound/music.mp3');
 var ambience = new Audio('assets/sound/ambience.mp3');
 var lostSound = new Audio('assets/sound/lost.mp3');
@@ -51,6 +51,7 @@ var blockSize = 30;
 //Collision groups for optimizing and efficient tracking of collisions.
 var blockCollisionGroup;
 var ballCollisionGroup;
+var ballSensorGroup;
 var paddleCollisionGroup;
 
 //Buffer around levels so paddle can hit 
@@ -76,6 +77,7 @@ var sounds;
 
 var timer = 0
 
+
 Number.prototype.map = function(inMin, inMax, outMin, outMax){
 
 	return ((this - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
@@ -91,7 +93,6 @@ function preload() {
 		Load in all visual assets.
 	*/
 
-	game.load.image('cursor', 'assets/visual/cursor.png');
 
 	//Player paddle and ball.
 	game.load.image('paddle', 'assets/visual/paddle(sprite).png');
@@ -106,6 +107,7 @@ function preload() {
 
 	game.load.image('lifeblock', 'assets/visual/block(life).png');
 	game.load.image('paddleblock', 'assets/visual/block(paddle).png');
+	game.load.spritesheet('ballblock', 'assets/visual/block(ball).png', 30, 30, 16);
 
 	game.load.image('spark', 'assets/visual/spark.png');
 
@@ -319,22 +321,22 @@ function createObj(){
 	ball.width = ball.height = ballSize;
 
 
-	emitter = game.add.emitter(0, 0, 2000);
-	emitter.makeParticles('ball');
+	ballTrail = game.add.emitter(0, 0, 2000);
+	ballTrail.makeParticles('ball');
 
 	//ball.addChild(emitter);
 
-	emitter.lifeSpan = 500;
+	ballTrail.lifeSpan = 500;
 
-	emitter.maxParticleSpeed = 10;
-	emitter.minParticleSpeed = 10;
+	ballTrail.maxParticleSpeed = 10;
+	ballTrail.minParticleSpeed = 10;
 
-	emitter.setAlpha(1, 0, 2000, Phaser.Easing.Linear.None, false);
-	emitter.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
-	emitter.autoAlpha = true;
-	emitter.autoScale = true;
+	ballTrail.setAlpha(1, 0, 2000, Phaser.Easing.Linear.None, false);
+	ballTrail.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
+	ballTrail.autoAlpha = true;
+	ballTrail.autoScale = true;
 
-	emitter.start(false, 2000, 10, 0, false);
+	ballTrail.start(false, 2000, 10, 0, false);
 
 
 }
@@ -466,9 +468,13 @@ function createMenus() {
 function update() { 
 
 
-	emitter.x = ball.x;
-	emitter.y = ball.y;
+	ballTrail.x = ball.x;
+	ballTrail.y = ball.y;
 
+	//menuStages.main = false;
+	//menuStages.game = true;
+
+	console.log(game);
 
 	//Change function of update based on games current stage.
 	if(menuStages.main || menuStages.options || menuStages.tutorial){
@@ -649,6 +655,7 @@ function initPhysics(){
 
 	//Set collision groups of all objects.
 	ballCollisionGroup = game.physics.p2.createCollisionGroup();
+	ballSensorGroup = game.physics.p2.createCollisionGroup();
 	paddleCollisionGroup = game.physics.p2.createCollisionGroup();
 	blockCollisionGroup = game.physics.p2.createCollisionGroup();
 
@@ -656,14 +663,16 @@ function initPhysics(){
 	secondPaddle.body.setCollisionGroup(paddleCollisionGroup);
 
 	//Set collisions between groups.
-	paddle.body.collides([ballCollisionGroup, blockCollisionGroup]);
-	secondPaddle.body.collides(ballCollisionGroup);
+	paddle.body.collides([ballCollisionGroup, ballSensorGroup, blockCollisionGroup]);
+	secondPaddle.body.collides([ballCollisionGroup, ballSensorGroup]);
 
 	//Setup ball collision group.
 	ball.body.setCollisionGroup(ballCollisionGroup);
 
 	ball.body.collides(paddleCollisionGroup, hitPaddle, this);
 	ball.body.collides(blockCollisionGroup, hitBlock, this);
+
+	//game.physics.p2.setPostBroadphaseCallback(senseBlock, this);
 
 }
 
@@ -856,9 +865,6 @@ function clearSave(){
 	console.log("All Saves Removed");
 
 }
-
-
-
 
 /*	DISPLAY
 
@@ -1178,7 +1184,7 @@ $(document).ready(function(event){
 
 function hitBlock(body1, body2){
 
-	console.log("here");
+	console.log("Block Hit");
 
 	//Standard blocks are static.
 	body2.static = false;
@@ -1221,12 +1227,19 @@ function hitBlock(body1, body2){
 			blockHit.markPowerup("life");
 
 		}
-		else {	//7.5% chance to spawn a life.
+		else if(blockHit.getColor() == "paddle"){	//7.5% chance to spawn a life.
 
 			//Spawn an extra life powerup!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'paddleblock');
 
 			blockHit.markPowerup("paddle");
+
+		}
+		else{
+
+			body2.sprite = game.add.sprite(body2.x, body2.y, 'ballblock');
+
+			blockHit.markPowerup("ball");
 
 		}
 
@@ -1275,6 +1288,14 @@ function hitBlock(body1, body2){
 
 }
 
+function senseBlock(body1, shape1, body2, contact){
+
+	console.log(body1.sprite.name);
+
+	//if(body1.sprite.name == "ball")
+
+}
+
 function hitPaddle(body1, body2){
 
 	//Play a sound when paddle is hit.
@@ -1287,14 +1308,17 @@ function collectPowerup(body1, body2){
 	//Log that powerup has been collected.
 	console.log("Powerup Collected!");
 
+	//Retrieve the block that has been collected using its ID.
 	var blockHit = levels[currentLevel].getBlock(body1.id);
 	
+	//Make sure any blocks that are undefined are not collected.
 	if(typeof blockHit == "undefined"){
 
 		return;
 
 	}
 
+	//Check which type of powerup this block is.
 	if(blockHit.getPowerup() == "paddle" && !secondPaddleActive){
 
 		//Set paddle as active.
@@ -1315,6 +1339,26 @@ function collectPowerup(body1, body2){
 		hud.lives.text = lives;
 
 	}
+	else if(blockHit.getPowerup() == "ball"){
+
+		game.add.tween(ball.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
+		game.add.tween(ballTrail.maxParticleScale).to({x: ballSize * 2, y: ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
+		game.add.tween(ballTrail.minParticleScale).to({x: ballSize * 2, y: ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
+
+		ball.body.clearCollision(true, true);
+
+		ball.body.setCollisionGroup(ballSensorGroup);
+		ball.body.collides(paddleCollisionGroup, hitPaddle, this);
+
+		ballSensor = ball.body.addCircle(ballSize * 2, ballSize * 2, 0, 0);
+		ballSensor.sensor = true;
+
+		ball.body.onBeginContact.add(senseBlock, this);
+
+
+		game.time.events.add(Phaser.Timer.SECOND * 10, removePowerUp, this);
+
+	}
 
 	blockHit.kinematic = true;
 
@@ -1326,7 +1370,7 @@ function collectPowerup(body1, body2){
 
 	//Create temporary tween to make smooth transition out.
 	game.add.tween(body1.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
-	game.add.tween(body1.sprite.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
+	game.add.tween(body1.sprite.scale).to({x: ballSize * 2, y: ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
 
 	//Deactivate block from level.
 	levels[currentLevel].deactivateBlock(body1.id);
@@ -1338,12 +1382,24 @@ function collectPowerup(body1, body2){
 
 function removePowerUp(){
 
-	//Set paddle to inactive.
-	secondPaddleActive = false;
-	secondPaddle.alpha = 1;
+	//Remove the Second Paddle.
+	if(secondPaddleActive){
+	
+		//Set paddle to inactive.
+		secondPaddleActive = false;
+		secondPaddle.alpha = 1;
 
-	//Make paddle fade out.
-	game.add.tween(secondPaddle.body.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
+		//Make paddle fade out.
+		game.add.tween(secondPaddle.body.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
+
+	}
+
+	//Remove enlarged Ball powerup.
+	if(ball.body.size > ballSize){
+
+		game.add.tween(ball.body.scale).to({x: ballSize, y: ballSize}, 500, Phaser.Easing.Linear.None, true);
+
+	}
 
 }
 
@@ -1686,13 +1742,6 @@ function leapGestures(frame){
 
 }
 
-function simulateClick(){
-
-
-	jQuery(document.elementFromPoint(x, y))
-
-}
-
 
 /*	MOVEMENT
 
@@ -1822,7 +1871,6 @@ function touchControls(lineAngle){
 
 }
 
-
 function setReferenceParameters(){
 
 	//Center of game area.
@@ -1950,13 +1998,28 @@ var Block = (
 			//Whether block is alive and whether it is a powerup.
 			this.blockAlive = true;
 
-			if(color == "life" || color == "paddle"){
+			//If block is a ball powerup, it has an animation as well as being a powerup.
+			if(this.color == "ball"){
 				
+				//This block has an animation.
+				this.animation = this.sprite.animations.add('glisten');
+				this.animation.onLoop.add(this.stopAnimation, this);
+
+				//Schedule a glisten event in future.
+				game.time.events.add(Phaser.Timer.SECOND * game.rnd.integerInRange(5, 10), this.playAnimation, this);
+
+			}
+
+			//Powerup "Colors".
+			if(color == "life" || color == "paddle" || color == "ball"){
+				
+				//Block is a powerup.
 				this.powerup = true;
 
 			}
 			else{
 
+				//Normal block.
 				this.powerup = false;
 
 			}
@@ -1994,6 +2057,22 @@ var Block = (
 
 		};
 
+		Block.prototype.playAnimation = function(){
+
+			this.animation.play(24, true, false);
+
+		}
+
+		Block.prototype.stopAnimation = function(){
+
+			this.animation.stop();
+			
+			//Schedule a glisten event in future.
+			game.time.events.add(Phaser.Timer.SECOND * game.rnd.integerInRange(5, 10), this.playAnimation, this);
+
+
+		}
+
 
 		//Set the block at a position.
 		Block.prototype.setPos = function(x, y){
@@ -2008,6 +2087,7 @@ var Block = (
 		
 		};
 
+		//Make the block sleep without destroying it.
 		Block.prototype.setDormant = function(){
 
 			//Block is not alive whilst dormant and body is sleeping.
@@ -2023,9 +2103,10 @@ var Block = (
 
 		};
 
+		//Return the body of this block.
 		Block.prototype.getBody = function(){
 
-			//Return the block's body.
+			//Return this block's body.
 			return this.sprite.body;
 
 		};
@@ -2215,7 +2296,7 @@ function BlockLine(startPos, direction, numOfBlocks, color){
 	}
 
 }
-s
+
 //Returns the block instance at the index in the parameter.
 BlockLine.prototype.getBlock = function(index){
 
@@ -2590,9 +2671,9 @@ Button.prototype.getName = function(){
 
 Button.prototype.setVisibility = function(visibility){
 
-		//Make the button and the associated text invisible.
-		this.button.visible = visibility;
-		this.text.visible 	= visibility;
+	//Make the button and the associated text invisible.
+	this.button.visible = visibility;
+	this.text.visible 	= visibility;
 
 }
 

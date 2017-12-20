@@ -12,7 +12,7 @@
 	<level id="1" name="A Single Block">
 		
 		<block absolute="false">
-			<color>life</color>
+			<color>blue</color>
 			<x>9</x>
 			<y>7</y>
 
@@ -24,7 +24,7 @@
 			
 		<blockLine>
 				
-			<color>green</color>
+			<color>ball</color>
 
 			<position>
 				<x>1</x>
