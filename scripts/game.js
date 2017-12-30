@@ -1,7 +1,12 @@
 
 
-var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, 'game-space', { preload: preload, create: create, update: update }, false, true);
+var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, 'game-space', null, false, true);
 
+
+game.state.add('boot', bootState);
+game.state.add('play', playState);
+
+game.state.start('boot');
 
 //Import Javascript sounds. Imported here because they need to play whilst the game is paused.
 var bgMusic = new Audio('assets/sound/music.mp3');
@@ -10,11 +15,25 @@ var lostSound = new Audio('assets/sound/lost.mp3');
 
 //Player paddle vars.
 var paddle, secondPaddle;
-var paddleSize = { x: 100, y:16};
+var paddleSize = { x: 100, y:16 };
 var secondPaddleActive = false;
 
 //Paddle circle radius.
-var paddleRunRadius = 350;
+var paddleRunRadius = function(){
+
+	//Paddle circle radius is a quarter of the screen, block size is proportional.
+	if($(window).width > $(window).height){
+
+		return $(window).width() / 3;
+
+	}
+	else{
+
+		return $(window).height() / 3;
+
+	}
+
+};
 
 //Track number of player lives.
 var lives = 3;
@@ -46,7 +65,7 @@ var controller;
 var leapTouch;
 
 //Track global block size.
-var blockSize = 30;
+var blockSize = paddleRunRadius() / 10;
 
 //Collision groups for optimizing and efficient tracking of collisions.
 var blockCollisionGroup;
@@ -84,7 +103,10 @@ Number.prototype.map = function(inMin, inMax, outMin, outMax){
 
 }
 
-//Function for Preloading all asset files.
+//Variable to hold loader progress bar.
+var preloadBar;
+
+/*/Function for Preloading all asset files.
 function preload() {
 	
 	controllerSetup();
@@ -94,8 +116,11 @@ function preload() {
 	*/
 
 
-	//Player paddle and ball.
+	/*/Player paddle and ball.
 	game.load.image('paddle', 'assets/visual/paddle(sprite).png');
+
+	
+
 	game.load.image('ball', 'assets/visual/ball.png');
 
 	//Blocks for targets and power ups.
@@ -118,8 +143,7 @@ function preload() {
 	//Muted speaker icon indicating whether game is muted.
 	game.load.image('mutedSpeaker', 'assets/visual/speakeroff.png');
 
-	//Background.
-	game.load.image('background', 'assets/visual/background(square,space).png');
+	
 
 	//Set mobile bool to not desktop.
 
@@ -134,7 +158,7 @@ function preload() {
 	game.scale.pageAlignHorizontally = true;
 	game.scale.pageAlignVertically = true;
 
-}
+}*/
 
 function controllerSetup(){
 
@@ -157,7 +181,7 @@ function controllerSetup(){
 	}
 
 	//Retrieve the Leap Motion controller.
-	controller = new Leap.Controller({enableGestures: true});
+	controller = new Leap.Controller({ enableGestures: true });
 
 	//On every frame...
 	controller.loop(function(frame) {
@@ -195,7 +219,7 @@ function controllerSetup(){
 
 }
 
-//Function encapsulating all creation of game objects, physics and initialisation.
+/*
 function create() {
 
 	leapTouch = new Phaser.Signal();
@@ -286,7 +310,7 @@ function create() {
 
 	resetBall();
 	
-}
+}//*/
 
 //Funciton that creates game objects.
 function createObj(){
@@ -464,7 +488,7 @@ function createMenus() {
 
 }
 
-//Function called on every update frame.
+/*/Function called on every update frame.
 function update() { 
 
 
@@ -474,17 +498,16 @@ function update() {
 	//menuStages.main = false;
 	//menuStages.game = true;
 
-	console.log(game);
 
 	//Change function of update based on games current stage.
 	if(menuStages.main || menuStages.options || menuStages.tutorial){
 
 		bgMusic.pause();
 
-		ball.body.x = game.width / 2;
-		ball.body.y = game.height * 0.2;
+		//ball.body.x = game.width / 2;
+		//ball.body.y = game.height * 0.2;
 		
-		ballWander(1000);
+		ballWander();
 
 		//Have levels ready but not visible as soon as they have been loaded from their file.
 		if(typeof levels[currentLevel] != "undefined"){
@@ -494,8 +517,6 @@ function update() {
 			
 
 		}
-
-		
 
 	}
 	else if(menuStages.endGame){
@@ -605,7 +626,7 @@ function update() {
 
 	}
 
-}
+}//*/
 
 
 /*	INITIALISERS
@@ -652,12 +673,18 @@ function initPhysics(){
 	paddle.physicsBodyType = Phaser.Physics.P2JS;
 	secondPaddle.physicsBodyType = Phaser.Physics.P2JS;
 	ball.physicsBodyType = Phaser.Physics.P2JS;
-
+	
 	//Set collision groups of all objects.
 	ballCollisionGroup = game.physics.p2.createCollisionGroup();
 	ballSensorGroup = game.physics.p2.createCollisionGroup();
 	paddleCollisionGroup = game.physics.p2.createCollisionGroup();
 	blockCollisionGroup = game.physics.p2.createCollisionGroup();
+
+}
+
+function initCollisions(){
+
+	
 
 	paddle.body.setCollisionGroup(paddleCollisionGroup);
 	secondPaddle.body.setCollisionGroup(paddleCollisionGroup);
@@ -671,8 +698,6 @@ function initPhysics(){
 
 	ball.body.collides(paddleCollisionGroup, hitPaddle, this);
 	ball.body.collides(blockCollisionGroup, hitBlock, this);
-
-	//game.physics.p2.setPostBroadphaseCallback(senseBlock, this);
 
 }
 
@@ -693,26 +718,27 @@ function initXMLLevels(levelNumber){
 
 					buildLevels(xml);
 
-
-					//Deactivate all levels...
-					for(var i = 0; i < levels.length; i++){
-
-						if(i < levelNumber){
-
-							//Stop blocks participating in collisions.
-							levels[i].deactivateBlock("all");
-
-						}
-
-						//Force invisibility.
-						levels[i].setVisibility(false, true);
-
-					}
 				}
 
 			})
 
-		).then(function(){
+		).done(function(){
+
+			//Deactivate all levels...
+			for(var i = 0; i < levels.length; i++){
+
+				if(i < levelNumber){
+
+					//Stop blocks participating in collisions.
+					levels[i].deactivateBlock("all");
+
+				}
+
+				//Force invisibility.
+				levels[i].setVisibility(false, true);
+
+
+			}
 
 			console.log("XML Loading Finished.");
 
@@ -1186,7 +1212,7 @@ function hitBlock(body1, body2){
 
 	console.log("Block Hit");
 
-	//Standard blocks are static.
+	//Make block not static so it can now move.
 	body2.static = false;
 
 	//Get the block that has been hit.
@@ -1202,10 +1228,6 @@ function hitBlock(body1, body2){
 	//Set the block as dormant (no physics).
 	blockHit.setDormant();
 	blockHit.explode();
-
-	console.log(blockHit.isPowerup());
-
-
 	
 	//15% chance to spawn a powerup.
 	if(blockHit.isPowerup()){
@@ -1288,13 +1310,6 @@ function hitBlock(body1, body2){
 
 }
 
-function senseBlock(body1, shape1, body2, contact){
-
-	console.log(body1.sprite.name);
-
-	//if(body1.sprite.name == "ball")
-
-}
 
 function hitPaddle(body1, body2){
 
@@ -1310,6 +1325,9 @@ function collectPowerup(body1, body2){
 
 	//Retrieve the block that has been collected using its ID.
 	var blockHit = levels[currentLevel].getBlock(body1.id);
+
+	//Remove the block body from all of it's collision groups and remove it's masks.
+	body1.clearCollision(true, true);	
 	
 	//Make sure any blocks that are undefined are not collected.
 	if(typeof blockHit == "undefined"){
@@ -1342,19 +1360,7 @@ function collectPowerup(body1, body2){
 	else if(blockHit.getPowerup() == "ball"){
 
 		game.add.tween(ball.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
-		game.add.tween(ballTrail.maxParticleScale).to({x: ballSize * 2, y: ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
-		game.add.tween(ballTrail.minParticleScale).to({x: ballSize * 2, y: ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
-
-		ball.body.clearCollision(true, true);
-
-		ball.body.setCollisionGroup(ballSensorGroup);
-		ball.body.collides(paddleCollisionGroup, hitPaddle, this);
-
-		ballSensor = ball.body.addCircle(ballSize * 2, ballSize * 2, 0, 0);
-		ballSensor.sensor = true;
-
-		ball.body.onBeginContact.add(senseBlock, this);
-
+		ballTrail.setScale(2, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
 
 		game.time.events.add(Phaser.Timer.SECOND * 10, removePowerUp, this);
 
@@ -1394,10 +1400,14 @@ function removePowerUp(){
 
 	}
 
-	//Remove enlarged Ball powerup.
-	if(ball.body.size > ballSize){
+	console.log(ball, ballSize);
 
-		game.add.tween(ball.body.scale).to({x: ballSize, y: ballSize}, 500, Phaser.Easing.Linear.None, true);
+	//Remove enlarged Ball powerup.
+	if(ball.scale.x == 2){
+
+		//Put scales back to defaults gradually.
+		game.add.tween(ball.scale).to({x: 1, y: 1}, 500, Phaser.Easing.Linear.None, true);
+		ballTrail.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
 
 	}
 
@@ -1492,12 +1502,14 @@ function buttonSelect(button){
 			mainMenu.setVisibility(false);
 
 			//Enable level and specialised objects.
-			levels[currentLevel].setVisibility(true, true);
+			//levels[currentLevel].setVisibility(true, true);
 			paddle.visible = true;
 			ball.visible = true;
 
 			//Resize game so player can see everything.
 			resizeGame();
+
+			initCollisions();
 
 
 		break;
@@ -1549,6 +1561,9 @@ function buttonSelect(button){
 			//Clear local save.
 			clearSave();
 
+			//Make button grey out to show action has been performed.
+			optionsMenu.disableButton("clearsaves");
+
 			//Change button text to confirm with user.
 			optionsMenu.changeText("clearsaves", "Deleted");
 
@@ -1561,6 +1576,7 @@ function buttonSelect(button){
 		case "credits":
 
 			optionsMenu.setVisibility(false);
+			creditsScreen.setVisibility(true);
 
 			menuStages.options = false;
 			menuStages.credits = true;
@@ -1645,6 +1661,8 @@ function buttonSelect(button){
 
 			//Unpause game.
 			game.paused = false;
+
+			removePowerUp();
 
 
 		break;
@@ -1782,18 +1800,6 @@ function paddleMove(paddleBody, lineAngle){
 
 }
 
-function resetBall(){
-
-	//Move ball to near corner.
-	ball.body.x = (game.width / 2);
-	ball.body.y = (game.height * 0.2);
-
-	//Send ball at level.
-	ball.body.velocity.x = 0;
-	ball.body.velocity.y = 0;
-
-}
-
 function pcControls(lineAngle){
 	
 	//If using Leap Motion and Left hand is visible just move the paddle, don't rotate here.
@@ -1871,6 +1877,18 @@ function touchControls(lineAngle){
 
 }
 
+function resetBall(){
+
+	//Move ball to near corner.
+	ball.body.x = (game.width / 2);
+	ball.body.y = (game.height * 0.2);
+
+	//Send ball at level.
+	ball.body.velocity.x = game.rnd.integerInRange(1, 172);
+	ball.body.velocity.y = 100;
+
+}
+
 function setReferenceParameters(){
 
 	//Center of game area.
@@ -1909,7 +1927,7 @@ function updateBallVelocity(){
 	//Get the balls velocity.
 	ballVector.set(ball.body.velocity.x, ball.body.velocity.y);
 
-	//If vector is zero magnitude, offset to prevent error.
+	//If vector is zero magnitude, offset to prevent error causing ball to stop.
 	if(ballVector.getMagnitude() == 0){
 
 		ballVector.set(0.01, 0.01);
@@ -1920,6 +1938,8 @@ function updateBallVelocity(){
 	//If the balls speed is less than specified value.
 	if(ballVector.getMagnitude() < ballSpeed || ballVector.getMagnitude() == 0){
 
+		ball.body.damping = 0;
+
 		//Accelerate ball.
 		ballVector.setMagnitude(ballVector.getMagnitude() + 1);
 
@@ -1929,15 +1949,33 @@ function updateBallVelocity(){
 
 	}
 
+	//If the bal is going too fast, make it decelerate slowly.
+	if(ballVector.getMagnitude() > ballSpeed){
+
+		ball.body.damping = 0.1;
+
+	}
+
 }
 
 function ballWander(radius){
 
+	//Ball mustn't hit anything.
 	ball.kinematic = true;
 
-	ball.body.velocity.x = Math.sin(2*Math.PI * (game.time.now / 2000)) * radius;
-	ball.body.velocity.y = Math.cos(2*Math.PI * (game.time.now / 2000)) * radius;
+	//Radii of both circles ('a' is outer), ('b' is inner).
+	var a = radius || paddleRunRadius;
+	var b = a / 20;
+
+	//Phase each circle a and b.
+	var wa = Math.PI * 2 * (game.time.now / 20000);
+	var wb = wa / 2;
+
+
+	ball.body.x = (a - b) * Math.cos(wa) + 100 * Math.cos(((a - b) / b) * wb) + game.width / 2;
+	ball.body.y = (a - b) * Math.sin(wa) - 100 * Math.sin(((a - b) / b) * wb) + game.height / 2;
 	
+	//Set ball wandering to true.		
 	ball.wandering = true;
 
 }
@@ -1950,7 +1988,6 @@ function ballFollow(target, speed){
 	//Edit velocity based on angle to follow target.
 	ball.body.velocity.x = Math.cos(angle) * speed;
 	ball.body.velocity.y = Math.sin(angle) * speed;
-
 
 }
 
@@ -2133,16 +2170,7 @@ var Block = (
 			this.emitter.start(true, 4000, null, 10);
 
 			game.add.tween(this.emitter).to({ alpha:0 }, 3000, "Linear", true);
-			game.time.events.add(Phaser.Timer.SECOND * 3, function(){
-
-				if(this.emitter != null){
-
-					this.emitter.destroy();
-
-				}
-
-			}, this);
-
+		
 		}
 
 
@@ -2160,7 +2188,11 @@ var Block = (
 
 			//Set sprite to visible and alive.
 			this.sprite.visible = true;
+			this.sprite.alpha = 0.1;
+			
+
 			this.sprite.alive = true;
+			game.add.tween(this.sprite).to({ alpha: 1 }, 1000, "Linear", true);
 
 			//Block is also alive and add body back to world.
 			this.blockAlive = true;
@@ -2438,8 +2470,20 @@ var Level = (
 
 		Level.prototype.numBlocksLeft = function(){
 
+			var numBlocksLeft = 0;
+
+			for(var i = 0; i < this.blocks.length; i++){
+
+				if(this.blocks[i].isAlive()){
+
+					numBlocksLeft++;
+
+				}
+
+			}
+
 			//Return the number of blocks left in the level.
-			return this.blocksLeft;
+			return numBlocksLeft;
 
 		};
 
