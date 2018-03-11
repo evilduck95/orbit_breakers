@@ -6,4 +6,6 @@ Keep the ball inside the level and destroy all blocks using the paddle.
 Click the mouse to stop the paddle and aim it to control the ball.
 
 When a powerup spawns (Yellow Blocks), you can collect it with your paddle, 
-this will give you a powerup that will help you to win the game! Double Click to go fullscreen.
+this will give you a powerup that will help you to win the game!
+
+When you run out of lives, you will lose the game.

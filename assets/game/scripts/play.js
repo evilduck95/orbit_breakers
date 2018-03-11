@@ -14,10 +14,12 @@ playState = {
 	//Function for Preloading all asset files.
 	preload: function(){
 
+
+
 		loadingText = game.add.text(game.width / 2, game.height * 0.75, "0%...", { font: "30px Bauhaus 93", fill: "#fff"}),
 
 		
-		preloadBar = game.add.sprite(game.width / 2, game.height / 2, 'loadingbar');
+		preloadBar = game.add.sprite(game.world.centerX, game.world.centerY, 'loadingbar');
 		preloadBar.anchor.setTo(0.5, 0.5);
 
 		game.load.setPreloadSprite(preloadBar);
@@ -70,26 +72,16 @@ playState = {
 		game.load.audio('pop', 'assets/sound/pop.mp3');
 		game.load.audio('beep', 'assets/sound/beep.mp3');
 		game.load.audio('powerup', 'assets/sound/pwrup.mp3');
-		game.load.audio('powerdown', 'assets/sound/pwrdn.mp3');
 		game.load.audio('lost', 'assets/sound/lost.mp3');
 
-		game.load.text('credit', 'data/credits.txt');
-
-
-		
 		game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
-		game.scale.fullScreenScaleMode = Phaser.ScaleManager.SHOW_ALL;
 		game.scale.pageAlignHorizontally = true;
 		game.scale.pageAlignVertically = true;
 
-		game.scale.setGameSize(1280, 720);
-
-	},
+	}, 
 
 	//Function encapsulating all creation of game objects, physics and initialisation.
 	create: function(){
-
-		console.log("Begin, ", game.cache.getText('credit'));
 
 		leapTouch = new Phaser.Signal();
 
@@ -98,7 +90,21 @@ playState = {
 		bgMusic.volume = 0.1;
 		lostSound.volume = 0.25;
 
-		
+		//Paddle circle radius is a quarter of the screen, block size is proportional.
+		if($(window).width > $(window).height){
+
+			paddleRunRadius = $(window).width() / 3;
+
+		}
+		else{
+
+			paddleRunRadius = $(window).height() / 3;
+
+		}
+		//blockSize = ((Math.sin(Math.PI / 4) * (paddleRunRadius * 2)) - levelBuffer) / 12;
+
+
+
 		//Create all specialized in game objects.
 		createObj();
 
@@ -106,7 +112,7 @@ playState = {
 		initPhysics();
 
 		//Add extra pointer for mobile users to use double touch.
-		if(player.controlMethod.mobile){
+		if(controlMethod.mobile){
 
 			game.input.addPointer();
 
@@ -119,33 +125,32 @@ playState = {
 
 		
 		//Initial Resize.
-		resizeGame($(window).width, $(window).width, game.centerPoint, game.currentLevel);
+		resizeGame($(window).width, $(window).height, centerPoint, currentLevel);
 
 		//Create all menus and add to game.
 		createMenus();
 
 		
-		//Group game.sounds under a single object.
-		game.sounds = {
+		//Group sounds under a single object.
+		sounds = {
 
 			pop: game.add.audio('pop'),
 			beep: game.add.audio('beep'), 
 			power: game.add.audio('powerup'),
-			antiPower: game.add.audio('powerdown'),
 			lost: game.add.audio('lost')
 
 		};
 
-		//Allow multiple powerup game.sounds in case multiple collected in quick succession.
-		game.sounds.power.allowMultiple = true;
+		//Allow multiple powerup sounds in case multiple collected in quick succession.
+		sounds.power.allowMultiple = true;
 
 
 		//Add muted speaker to game but don't show yet.
 		mutedSpeaker = game.add.sprite(100, 100, 'mutedSpeaker');
 		mutedSpeaker.visible = false;
 
-		//Read in Xml values and build game.levels.
-		initXMLLevels(0);
+		//Read in Xml values and build levels.
+		initXMLLevels();
 
 		//Create all needed text that isn't inside buttons.
 		createText();
@@ -160,15 +165,10 @@ playState = {
 		loadGame();
 
 		//If the loaded level is not a number, that indicates there is no save, revert to defaults.
-		if(isNaN(game.currentLevel)){
+		if(isNaN(currentLevel)){
 
-			game.currentLevel = 0;
-
-		}
-
-		if(isNaN(player.lives)){
-
-			player.lives = 3;
+			currentLevel = 0;
+			lives = 3;
 
 		}
 
@@ -177,93 +177,91 @@ playState = {
 
 		ball.wandering = true;
 
-		if(loadVolume() === 0){
+		//Update HUD to new blocks remaining number.
+		//hud.blocksLeft.text = levels[currentLevel].numBlocksLeft();
+		
+		if(loadVolume() == 0){
 
 			game.sound.mute = true;
 			muteAll();
 
 		}
 
-		paddle.lineAngle = 0;
-
-		//Make some small modifications to the credits and end game screens.
-		menus.creditsScreen.addText(game.cache.getText('credit'), (game.width * 0.1) + 0.5, (game.height * 0.1) + 0.5, game.width, game.height);
-		//Move the title to the left side.
-		menus.creditsScreen.moveTitle(game.width * 0.2, game.height * 0.2);
-		//Move the button up and to the left.
-		menus.creditsScreen.moveButton(game.width * 0.2, game.height / 2);
-		//Set invisible until needed.
-		menus.creditsScreen.setVisibility(false);
-		
-		//Make the same modifications to the end game screen.
-		menus.endGameScreen.addText(game.cache.getText('credit'), (game.width * 0.1) + 0.5, (game.height * 0.1) + 0.5, game.width, game.height);
-		//Move the title to the left.
-		menus.endGameScreen.moveTitle(game.width * 0.2, game.height * 0.2);
-		//Move the button up and to the left.
-		menus.endGameScreen.moveButton(game.width * 0.2, game.height / 2);
-		//Set invisible until game ends.
-		menus.endGameScreen.setVisibility(false);
-
 	},
 
 	update: function(){
 
-		ball.ballTrail.x = ball.x;
-		ball.ballTrail.y = ball.y;
+		ballTrail.x = ball.x;
+		ballTrail.y = ball.y;
 
 		//Change function of update based on games current stage.
-		if(menus.stages.main || menus.stages.options || menus.stages.tutorial){
+		if(menuStages.main || menuStages.options || menuStages.tutorial){
 
 			bgMusic.pause();
 			
 			ballWander();
 
-			//Have game.levels ready but not visible as soon as they have been loaded from their file.
-			if(typeof game.levels[game.currentLevel] !== "undefined"){
+			//Have levels ready but not visible as soon as they have been loaded from their file.
+			if(typeof levels[currentLevel] != "undefined"){
 
-				game.levels[game.currentLevel].setVisibility(false);
+				levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, true);
+				levels[currentLevel].setVisibility(false);
 				
 
 			}
 
 		}
-		else if(menus.stages.endGame){
+		else if(menuStages.endGame){
 
 			//Show end screen and add credits to menu.
-			menus.endGameScreen.setVisibility(true);
+			endGameScreen.setVisibility(true);
 			console.log("text", creditText);
-			menus.endGameScreen.addText(game.cache.getText('credit'), (game.width * 0.2) + 0.5, (game.height * 0.4) + 0.5, game.width * 0.7, game.height * 0.9);
+			endGameScreen.addText(creditText, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
 
 		}
-		else if(menus.stages.credits){
+		else if(menuStages.credits){
 
 			//Show credits screen.
-			menus.creditsScreen.setVisibility(true);
+			creditsScreen.setVisibility(true);
+			creditsScreen.addText(creditText, 10, game.height * 0.2, game.width * 0.7, game.height * 0.9);
 
 		}
-		else if(menus.stages.levelFinish){
+		else if(menuStages.levelFinish){
 
-			ballWander((Math.sin(game.time.now / 200) * 50) + 20);
+
+			if(!ball.wondering){
+
+				//Make ball wander around screen.
+				ballFollow({x: game.width / 2, y: game.height * 0.2}, 200);
+
+			}
+			if(ball.body.y < game.height * 0.25){
+
+				ball.wandering = false;
+				ballWander(50);
+
+			}
 
 		}
-		else if(menus.stages.fail){
+		else if(menuStages.fail){
 
 			//Game failed, disable current level and pause game.
 			game.paused = true;
-			game.levels[game.currentLevel].setVisibility(false);
+			levels[currentLevel].setVisibility(false);
 
+			console.log("Lives Remaining", lives);
 
-			//If no player.lives are left, player may not retry.
-			if(player.lives === 0){
+			//If no lives are left, player may not retry.
+			if(lives == 0){
 
-				menus.failScreen.title.text += "\nAnd You're Out of lives!";
-				menus.failScreen.disableButton("retry");
+				failScreen.title.text += "\nAnd You're Out of Lives!";
+				failScreen.disableButton("retry");
 
 				
 			}
 
 		}
-		else if(menus.stages.game){
+		else if(menuStages.game){
 
 			if(!game.sound.mute){
 				
@@ -272,7 +270,7 @@ playState = {
 			}
 			if(ball.wandering){
 
-				let target = new Phaser.Point(game.width / 2, game.height / 2 - (getPaddleRunRadius() * 2 / 3));
+				var target = new Phaser.Point(game.width / 2, game.height * 0.2);
 
 				//Make ball reset slowly to starting position.
 				ballFollow(target, 200);
@@ -282,15 +280,12 @@ playState = {
 				
 					ball.wandering = false;
 					resetBall();
-					game.levels[game.currentLevel].setVisibility(true, true);
+					levels[currentLevel].setVisibility(true, true);
 				
 				}
 
-				let x = game.time.now / 5000;
-
 				//Make paddle move with exponential decay on velocity.
-				paddle.lineAngle = Math.sin(1 / Math.pow(x, 2)) * Math.PI * 2;
-
+				lineAngle = lineAngle + Math.exp(-game.time.now / 800);
 			}
 			else{
 				
@@ -300,40 +295,30 @@ playState = {
 				//Update necessary references in space for game function (e.g. center point).
 				setReferenceParameters();
 
-				//Check for the current game.levels completion.
+				//Check for the current levels completion.
 				checkLevelCompletion();
 				
 				//Check if the ball goes out of bounds for failure condition.
 				checkBallOutOfBounds();
 
-				game.input.mousePointer.timer = 0;
-
-				if(game.input.mousePointer.msSinceLastClick > (20000 + game.input.mousePointer.timer)){
-
-					game.input.mousePointer.timer += game.input.mousePointer.msSinceLastClick;
-
-					flashText("Click to Rotate Paddle");
-
-				}
-
 			}
 
 			//Update HUD on every frame.
-			hud.levelName.text = game.levels[game.currentLevel].getName();
-			hud.level.text = "Level: " + game.currentLevel;
+			hud.levelName.text = levels[currentLevel].getName();
+			hud.level.text = currentLevel;
 
 			//Ensure game is not paused!
 			game.paused = false;
 			
 			//Choose control function based on running OS type.
-			if(player.controlMethod.mobile){
+			if(controlMethod.mobile){
 
-				touchControls(paddle.lineAngle);
+				touchControls(lineAngle);
 
 			}
 			else{
 
-				pcControls(paddle.lineAngle);
+				pcControls(lineAngle);
 
 			}
 		}

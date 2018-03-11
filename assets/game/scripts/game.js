@@ -1,86 +1,100 @@
 
-window.devicePixelRatio = window.devicePixelRatio || (window.screen.deviceXDPI / window.screen.logicalXDPI);
 
 var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, 'game-space', null, false, true);
+
 
 game.state.add('boot', bootState);
 game.state.add('play', playState);
 
 game.state.start('boot');
 
-//Import Javascript game.sounds. Imported here because they need to play whilst the game is paused.
+//Import Javascript sounds. Imported here because they need to play whilst the game is paused.
 var bgMusic = new Audio('assets/sound/music.mp3');
 var ambience = new Audio('assets/sound/ambience.mp3');
 var lostSound = new Audio('assets/sound/lost.mp3');
 
-var backgroundImage, paddle, ball;
+//Player paddle vars.
+var paddle, secondPaddle;
+var paddleSize = { x: 100, y:16 };
+var secondPaddleActive = false;
 
-game.levels = [];
+var paddleFollowLag = 8;
 
 //Paddle circle radius.
-function getPaddleRunRadius(){
+var paddleRunRadius = function(){
 
-	//Paddle circle radius is a quarter of the smallest dimension of the screen, block size is proportional.
-	if(game.width < game.height){
+	//Paddle circle radius is a quarter of the screen, block size is proportional.
+	if($(window).width > $(window).height){
 
-		return game.width * 0.4;
+		return $(window).width() / 3;
 
 	}
 	else{
 
-		return game.height * 0.4;
+		return $(window).height() / 3;
 
 	}
 
 };
 
+//Track number of player lives.
+var lives = 3;
 
-//Player Related variables.
-var player = {
+//Points needed to remember.
+var mousePoint, centerPoint;
+mousePoint = centerPoint = new Phaser.Point(0, 0);
+//Ball vars.
+var ball;
+var ballSize = 15;
+var ballSpeed = 200;
+var ballTrail;
 
-	//Track number of player player.lives.
-	lives: 3,
+//Tracking for the balls velocity.
+var ballVector = new Phaser.Point();
 
-	//Hand tracking for leap motion.
-	leftHand: new Object(),
-	rightHand: new Object(),
 
-	mousePoint: new Phaser.Point(),
+//Size difference in a single axis between body and sprite.
+var bodyOffsetSize = 15;
 
-	controlMethod: { desktop: true, mobile: false, leapMotion: false }
+//Angle between the center of the screen and the mouse position.
+var lineAngle = 0;
+var leftHand, rightHand;
+var paddleRotating = false;
 
-};
+//Track whether the browser is running on mobile OS.
+var controlMethod = { desktop: true, mobile: false, leapMotion: false };
+var controller;
+var leapTouch;
+
+//Track global block size.
+var blockSize = paddleRunRadius() / 10;
 
 //Collision groups for optimizing and efficient tracking of collisions.
-game.collisionGroups = {
-	
-	blockCollisionGroup: new Object(),
-	ballCollisionGroup: new Object(),
-	ballSensorGroup: new Object(),
-	paddleCollisionGroup: new Object()
+var blockCollisionGroup;
+var ballCollisionGroup;
+var ballSensorGroup;
+var paddleCollisionGroup;
 
-};
+//Buffer around levels so paddle can hit 
+var levelBuffer = blockSize * 3;
 
-var menus = {
-	
-	//All game Menus.
-	mainMenu: new Object(),
-	optionsMenu: new Object(),
-	nextLevelMenu: new Object(),
-	failScreen: new Object(),
-	endGameScreen: new Object(),
-	tutorialScreen: new Object(),
-	creditsScreen: new Object(),
+//Store all game levels and track which level is currently active.
+var levels = new Array();
+var currentLevel = 0;
 
-	//Array tracking the currently active game stage, different to menus so that gameplay can be tracked also.
-	stages: { main: true, options: false, game: false, levelFinish: false, fail: false, endGame: false, tutorial: false }
+//All game Menus.
+var mainMenu, optionsMenu, nextLevelMenu, failScreen, endGameScreen, tutorialScreen;
 
-};
+//Array tracking the currently active game stage, different to menus so that gameplay can be tracked also.
+var menuStages = { main: true, options: false, game: false, levelFinish: false, fail: false, endGame: false, tutorial: false };
 
 //Container for UI and storage of Credits from text file.
 var hud;
 var creditText, tutorialText;
 var fullscreenText, pauseText;
+
+//Container for all sounds.
+var sounds;
 
 var timer = 0
 
@@ -96,26 +110,26 @@ var preloadBar;
 
 function controllerSetup(){
 
-	player.controlMethod.leapMotion = false;
-
 	//Detect whether this device is a desktop or a mobile device.
-	if(game.device.desktop){
+	if(this.game.device.desktop){
 
 		//Set device tracker to desktop.
-		player.controlMethod.mobile = false;
-		player.controlMethod.desktop = true;
+		controlMethod.mobile = false;
+		controlMethod.desktop = true;
+		controlMethod.leapMotion = false;
 
 	}
 	else{
 
 		//Set device tracker to mobile.
-		player.controlMethod.mobile = true;
-		player.controlMethod.desktop = false;
+		controlMethod.mobile = true;
+		controlMethod.desktop = false;
+		controlMethod.leapMotion = false;
 		
 	}
 
 	//Retrieve the Leap Motion controller.
-	var controller = new Leap.Controller({ enableGestures: false });
+	controller = new Leap.Controller({ enableGestures: true });
 
 	//On every frame...
 	controller.loop(function(frame) {
@@ -124,29 +138,30 @@ function controllerSetup(){
 	    for(var i in frame.handsMap){
 
 	    	//Get the current hand.
-	    	let hand = frame.handsMap[i];
+	    	var hand = frame.handsMap[i];
 
 	    	//If this hand is the right hand...
-	    	if(hand.type === "right"){
+	    	if(hand.type == "right"){
 
 	    		//Update right hand variable.
-	    		player.rightHand = hand;
+	    		rightHand = hand;
 
 	    	}
 	    	else{
 
 	    		//Otherwise update the left hand variable.
-	    		player.leftHand = hand;
+	    		leftHand = hand;
 
-	    }
+	    	}
 
-    	//As long as this is looping, the Leap Motion controller is in use.
-      	player.controlMethod.mobile = false;
-		player.controlMethod.desktop = false;
-		player.controlMethod.leapMotion = true;
+	    	   //As long as this is looping, the Leap Motion controller is in use.
+	      	   controlMethod.mobile = false;
+			   controlMethod.desktop = false;
+			   controlMethod.leapMotion = true;
 
 	   }
 
+	   leapGestures(frame);
 
     });
 
@@ -157,15 +172,9 @@ function controllerSetup(){
 //Funciton that creates game objects.
 function createObj(){
 
-	//Track body ID of last block that was hit.
-	game.lastBlockHit = -1;
-
-	//Track global block size.
-	game.blockSize = getPaddleRunRadius() / 10;
-
 	//Setup reference points, center, mouse and paddle.
-	game.centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
-	player.mousePoint = new Phaser.Point();
+	centerPoint = new Phaser.Point(game.width / 2, game.height / 2);
+	mousePoint = new Phaser.Point();
 
 
 	//Add a background image, anchor from center.
@@ -175,48 +184,40 @@ function createObj(){
 
 	//Load in paddle asset in center, also load in second paddle.
 	paddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
+	secondPaddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
+	secondPaddle.tint = 0xffaaff;
 
-	paddle.paddleSize = { x: getPaddleRunRadius() * 0.25, y: getPaddleRunRadius() / 20 };
-	paddle.paddleFollowLag = 8;
-	paddle.lineAngle = 0;
-
-	paddle.secondPaddle = game.add.sprite(game.width / 2, game.height / 2, 'paddle');
-	paddle.secondPaddle.tint = 0xffaaff;
-	paddle.secondPaddle.visible = false;
-	paddle.secondPaddle.active = false;
+	secondPaddle.visible = false;
 
 	//Setup paddle size.
-	paddle.width = paddle.secondPaddle.width = paddle.paddleSize.x;
-	paddle.height = paddle.secondPaddle.height = paddle.paddleSize.y;
+	paddle.width = secondPaddle.width = paddleSize.x;
+	paddle.height = secondPaddle.height = paddleSize.y;
+
 
 
 	//Load in ball asset at center.
-	ball = game.add.sprite(game.width / 2, game.height / 2, 'ball');
-
-	ball.ballSize = getPaddleRunRadius() / 40;
-	ball.ballSpeed = 200;
-	ball.superBall = false;
+	ball = game.add.sprite(0, 0, 'ball');
 
 	//Set ball to global size.
-	ball.width = ball.height = ball.ballSize;
+	ball.width = ball.height = ballSize;
 
 
-	ball.ballTrail = game.add.emitter(0, 0, 2000);
-	ball.ballTrail.makeParticles('ball');
+	ballTrail = game.add.emitter(0, 0, 2000);
+	ballTrail.makeParticles('ball');
 
-	//ball.addChild(ball.ballTrail);
+	//ball.addChild(emitter);
 
-	ball.ballTrail.lifeSpan = 500;
+	ballTrail.lifeSpan = 500;
 
-	ball.ballTrail.maxParticleSpeed = 10;
-	ball.ballTrail.minParticleSpeed = 10;
+	ballTrail.maxParticleSpeed = 10;
+	ballTrail.minParticleSpeed = 10;
 
-	ball.ballTrail.setAlpha(1, 0, 2000, Phaser.Easing.Linear.None, false);
-	ball.ballTrail.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
-	ball.ballTrail.autoAlpha = true;
-	ball.ballTrail.autoScale = true;
+	ballTrail.setAlpha(1, 0, 2000, Phaser.Easing.Linear.None, false);
+	ballTrail.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
+	ballTrail.autoAlpha = true;
+	ballTrail.autoScale = true;
 
-	ball.ballTrail.start(false, 2000, 10, 0, false);
+	ballTrail.start(false, 2000, 10, 0, false);
 
 
 }
@@ -225,15 +226,15 @@ function createObj(){
 function createText(){
 
 	//Default text style.
-	let textStyle = { font: "30px Bauhaus 93", fill: "#fff"};
+	var textStyle = { font: "30px Bauhaus 93", fill: "#fff"};
 
 	//Setup HUD.
 	hud = {
 
-		level: game.add.text(game.width * 0.01, game.height * 0.01, "n", textStyle), 
-		levelName: game.add.text(game.width * 0.1, game.height * 0.01, "level name", textStyle),
-		blocksLeft: game.add.text(game.width * 0.01, game.height * 0.95, "blocks left", textStyle),
-		lives: game.add.text(game.width * 0.95, game.height * 0.01, "Lives", textStyle)
+		level: game.add.text(10, 10, "n", textStyle), 
+		levelName: game.add.text(100, 10, "level name", textStyle),
+		blocksLeft: game.add.text(10, game.height - 40, "blocks left", textStyle),
+		lives: game.add.text(game.width - 10, 10, "lives", textStyle)
 
 	};
 
@@ -243,7 +244,7 @@ function createText(){
 	hud.lives.visible = false;
 
 	hud.lives.anchor.setTo(1, 0);
-	hud.lives.text = "Lives: " + player.lives;
+	hud.lives.text = lives;
 
 
 	//Setup text that reminds user how to go fullscreen.
@@ -264,69 +265,71 @@ function createText(){
 function createMenus() {
 
 	//Create main menu for start of game.
-	menus.mainMenu = new Menu("Orbit Breakers");
-	menus.mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
-	menus.mainMenu.addButton(game.width / 3, game.height * (2 / 3), "Options", "options");
-	menus.mainMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "How to Play", "tutorial");
+	mainMenu = new Menu("Orbit Breaker");
+	mainMenu.addButton(game.width / 2, game.height / 2, "Play", "play");
+	mainMenu.addButton(game.width / 3, game.height * (2 / 3), "Options", "options");
+	mainMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "How to Play", "tutorial");
 
-	menus.mainMenu.setVisibility(true);
+	mainMenu.setVisibility(true);
 
 	//Create options menu for settings manipulation.
-	menus.optionsMenu = new Menu("Game Options");
-	menus.optionsMenu.addButton(game.width / 3, game.height / 2, "Sound", "togglesound");
-	menus.optionsMenu.addButton(game.width * (2 / 3), game.height / 2, "Credits", "credits");
-	menus.optionsMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "Back", "back");
-	menus.optionsMenu.addButton(game.width / 3, game.height * (2 / 3), "Clear Save", "clearsaves");
+	optionsMenu = new Menu("Game Options");
+	optionsMenu.addButton(game.width / 3, game.height / 2, "Sound", "togglesound");
+	optionsMenu.addButton(game.width * (2 / 3), game.height / 2, "Credits", "credits");
+	optionsMenu.addButton(game.width * (2 / 3), game.height * (2 / 3), "Back", "back");
+	optionsMenu.addButton(game.width / 3, game.height * (2 / 3), "Clear Save", "clearsaves");
 
-	menus.optionsMenu.setVisibility(false);
+	optionsMenu.setVisibility(false);
 
-	//Next level menu for ending of game.levels.
-	menus.nextLevelMenu = new Menu("Level Complete!");
-	menus.nextLevelMenu.addButton(game.width / 2, game.height / 2, "Continue", "nextlevel");
-	menus.nextLevelMenu.addText("Game Saved", (game.width / 2) - 100, (game.height / 2) - 100, game.width, game.height);
+	//Next level menu for ending of levels.
+	nextLevelMenu = new Menu("Level Complete!");
+	nextLevelMenu.addButton(game.width / 2, game.height / 2, "Continue", "nextlevel");
+	nextLevelMenu.addText("Game Saved", (game.width / 2) - 100, (game.height / 2) - 100, game.width, game.height);
 
-	menus.nextLevelMenu.setVisibility(false);
+	nextLevelMenu.setVisibility(false);
 
 	//Screen to show if player fails.
-	menus.failScreen = new Menu("You have Lost");
-	menus.failScreen.addButton(game.width / 2, game.height / 2, "Try Again", "retry");
-	menus.failScreen.addButton(game.width / 2, game.height * (2 / 3), "Start Over", "restart");
+	failScreen = new Menu("You have Lost");
+	failScreen.addButton(game.width / 2, game.height / 2, "Try Again", "retry");
+	failScreen.addButton(game.width / 2, game.height * (2 / 3), "Start Over", "restart");
 
-	menus.failScreen.setVisibility(false);
+	failScreen.setVisibility(false);
 
 	//Screen for end of game.
-	menus.endGameScreen = new Menu("You have Completed Orbit Breakers!");
-	menus.endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
+	endGameScreen = new Menu("You have Completed Orbit Breakers!");
+	endGameScreen.addButton(game.width * 0.8, game.height / 2, "Try Again?", "restart");
 
-	menus.endGameScreen.setVisibility(false);
+	endGameScreen.setVisibility(false);
 
-	menus.creditsScreen = new Menu("Game Credits");
-	menus.creditsScreen.addButton(game.width / 2, game.height * 0.9, "Back", "back");
+	creditsScreen = new Menu("Game Credits");
+	creditsScreen.addButton(game.width / 2, game.height * (2 / 3), "Back", "back");
 
-	menus.creditsScreen.setVisibility(false);
+	creditsScreen.setVisibility(false);
 
-	menus.tutorialScreen = new Menu("How to Play");
-	menus.tutorialScreen.addButton(game.width / 2, game.height * 0.9, "Back", "back");
+	tutorialScreen = new Menu("How to Play");
+	tutorialScreen.addButton(game.width / 2, game.height - 200, "Back", "back");
 
-	menus.tutorialScreen.setVisibility(false);
+	tutorialScreen.setVisibility(false);
 
 
+	//Query credits file.
+	jQuery.get('data/credits.txt', function(data){
 
-	let textFileName;
+		creditText = data;
 
-	if(player.controlMethod.mobile){
+	});
+
+
+	var textFileName;
+
+	if(controlMethod.mobile){
 
 		textFileName = 'data/tutorialMob.txt';
 
 	}
-	else if(player.controlMethod.desktop){
-
-		textFileName = 'data/tutorialPC.txt';
-
-	}
 	else{
 
-		textFileName = 'data/tutorialLeap.txt';
+		textFileName = 'data/tutorialPC.txt';
 
 	}
 
@@ -336,7 +339,7 @@ function createMenus() {
 
 	})
 
-	menus.endGameScreen.setVisibility(false);
+	endGameScreen.setVisibility(false);
 
 }
 
@@ -350,30 +353,27 @@ function createMenus() {
 //Initialise All Object Physics
 function initPhysics(){
 
-	//Buffer around game.levels so paddle surrounds level blocks.
-	game.levelBuffer = game.blockSize * 3;
-
 	//Start up P2 Physics system.
 	game.physics.startSystem(Phaser.Physics.P2JS);
 
 	//Enable impacts between paddles and balls (blocks are dealt with separately).
 	game.physics.p2.setImpactEvents(true);
-	game.physics.p2.enable([paddle, paddle.secondPaddle, ball], false);
+	game.physics.p2.enable([paddle, secondPaddle, ball], false);
 
 	//Setup paddle body.
-	paddle.body.setRectangle(paddle.paddleSize.x, paddle.paddleSize.y, 0, 0, 0);
+	paddle.body.setRectangle(paddleSize.x, paddleSize.y, 0, 0, 0);
 	paddle.body.static = true;
 
 	//Setup second paddle body.
-	paddle.secondPaddle.body.setRectangle(paddle.paddleSize.x, paddle.paddleSize.y, 0, 0, 0);
-	paddle.secondPaddle.body.static = true;
+	secondPaddle.body.setRectangle(paddleSize.x, paddleSize.y, 0, 0, 0);
+	secondPaddle.body.static = true;
 
 	//Second paddle body needs adjustment.
-	paddle.secondPaddle.body.x = -100;
-	paddle.secondPaddle.body.y = -100;
+	secondPaddle.body.x = -100;
+	secondPaddle.body.y = -100;
 
 	//Setup ball body.
-	ball.body.setCircle(ball.ballSize / 2);
+	ball.body.setCircle(ballSize / 2);
 
 	//Ball initial velocity.	
 	ball.body.velocity.x = -10;
@@ -388,33 +388,31 @@ function initPhysics(){
 	
 	//Set Physics body types.
 	paddle.physicsBodyType = Phaser.Physics.P2JS;
-	paddle.secondPaddle.physicsBodyType = Phaser.Physics.P2JS;
+	secondPaddle.physicsBodyType = Phaser.Physics.P2JS;
 	ball.physicsBodyType = Phaser.Physics.P2JS;
 	
 	//Set collision groups of all objects.
-	game.collisionGroups.ballCollisionGroup = game.physics.p2.createCollisionGroup();
-	game.collisionGroups.ballSensorGroup = game.physics.p2.createCollisionGroup();
-	game.collisionGroups.paddleCollisionGroup = game.physics.p2.createCollisionGroup();
-	game.collisionGroups.blockCollisionGroup = game.physics.p2.createCollisionGroup();
+	ballCollisionGroup = game.physics.p2.createCollisionGroup();
+	ballSensorGroup = game.physics.p2.createCollisionGroup();
+	paddleCollisionGroup = game.physics.p2.createCollisionGroup();
+	blockCollisionGroup = game.physics.p2.createCollisionGroup();
 
 }
 
 function initCollisions(){
 
-	var allCgs = game.collisionGroups;
-
-	paddle.body.setCollisionGroup(allCgs.paddleCollisionGroup);
-	paddle.secondPaddle.body.setCollisionGroup(allCgs.paddleCollisionGroup);
+	paddle.body.setCollisionGroup(paddleCollisionGroup);
+	secondPaddle.body.setCollisionGroup(paddleCollisionGroup);
 
 	//Set collisions between groups.
-	paddle.body.collides([allCgs.ballCollisionGroup, allCgs.ballSensorGroup, allCgs.blockCollisionGroup]);
-	paddle.secondPaddle.body.collides([allCgs.ballCollisionGroup, allCgs.ballSensorGroup]);
+	paddle.body.collides([ballCollisionGroup, ballSensorGroup, blockCollisionGroup]);
+	secondPaddle.body.collides([ballCollisionGroup, ballSensorGroup]);
 
 	//Setup ball collision group.
-	ball.body.setCollisionGroup(allCgs.ballCollisionGroup);
+	ball.body.setCollisionGroup(ballCollisionGroup);
 
-	ball.body.collides(allCgs.paddleCollisionGroup, hitPaddle, this);
-	ball.body.collides(allCgs.blockCollisionGroup, hitBlock, this);
+	ball.body.collides(paddleCollisionGroup, hitPaddle, this);
+	ball.body.collides(blockCollisionGroup, hitBlock, this);
 
 }
 
@@ -441,52 +439,38 @@ function initXMLLevels(levelNumber){
 
 		).done(function(){
 
-			//If number stored is higher than number of levels, restart game.
-			if(game.currentLevel > game.levels.length - 1){
-
-				//Restart levels at zero.
-				game.currentLevel = 0;
-
-			}
-
-			//Deactivate all game.levels...
-			for(var i = 0; i < game.levels.length; i++){
+			//Deactivate all levels...
+			for(var i = 0; i < levels.length; i++){
 
 				if(i < levelNumber){
 
 					//Stop blocks participating in collisions.
-					game.levels[i].deactivateBlock("all");
+					levels[i].deactivateBlock("all");
 
 				}
 
 				//Force invisibility.
-				game.levels[i].setVisibility(false, true);
+				levels[i].setVisibility(false, true);
 
 
 			}
 
 			console.log("XML Loading Finished.");
 
-			//Update HUD to new blocks remaining number.
-			hud.blocksLeft.text = "Blocks Left: " + game.levels[game.currentLevel].numBlocksLeft();
-
-
 		});
 	});
 
-	
-
 }
 
-//Subsidiary of initXMLLevels, uses xml data to build all game.levels.
+//Subsidiary of initXMLLevels, uses xml data to build all levels.
 function buildLevels(xml){
 
 	//Create arrays to store blocks.
-	var blockLines = [];
-	var blocks = [];
+	var blockLines = new Array();
+	var blocks = new Array();
 
-	//Search through all game.levels...
-	game.levels = $(xml).find("level").map(
+	//Search through all levels...
+	levels = $(xml).find("level").map(
 
 		function(){
 
@@ -544,7 +528,7 @@ function buildLevels(xml){
 
 
 				//Check if the position of this block is on local coord system or global(absolute).
-				if($(this).attr("absolute") === "true"){
+				if($(this).attr("absolute") == "true"){
 
 					block.makeAbsolute(true);
 
@@ -577,7 +561,7 @@ function buildLevels(xml){
 
 	);
 
-	console.log("All game.levels", game.levels);
+	console.log(levels);
 
 }
 
@@ -589,23 +573,23 @@ function buildLevels(xml){
 //Store game data locally.
 function saveGame(){
 
-	//Locally store the latest completed level and the number of player.lives.
-	localStorage.setItem("levelNumber", game.currentLevel + 1);
-	localStorage.setItem("Lives", player.lives);
+	//Locally store the latest completed level and the number of lives.
+	localStorage.setItem("levelNumber", currentLevel + 1);
+	localStorage.setItem("lives", lives);
 
-	console.log("Game Saved", game.currentLevel + 1);
+	console.log("Game Saved", currentLevel + 1);
 
 }
 
 //Obtain locally stored data and resume from last completed level.
 function loadGame(){
 
-	//Retrieve the locally stored level number and player.lives.
-	game.currentLevel = parseInt(localStorage.getItem("levelNumber"));
-	player.lives = parseInt(localStorage.getItem("lives"));
+	//Retrieve the locally stored level number and lives.
+	currentLevel = parseInt(localStorage.getItem("levelNumber"));
+	lives = parseInt(localStorage.getItem("lives"));
 
 	//Debug text for console.
-	var debugLoad = ("Game Loaded, Level " + game.currentLevel + " | player.lives " + player.lives).toString();
+	var debugLoad = ("Game Loaded, Level " + currentLevel + " | Lives " + lives).toString();
 	debugLoad = debugLoad.replace(/NaN/g, "-");
 
 	console.log(debugLoad);
@@ -615,7 +599,7 @@ function loadGame(){
 //Delete all locally stored data.
 function clearSave(){
 
-	//Clear local storage, which consists of level number and player.lives.
+	//Clear local storage, which consists of level number and lives.
 	localStorage.removeItem("levelNumber");
 	localStorage.removeItem("lives");
 
@@ -628,9 +612,7 @@ function saveVolume(value){
 	//Save the passed value to local storage.
 	localStorage.setItem("volume", value);
 
-	var name = "";
-
-	console.log("Saved value", value);
+	console.log("Saved", value)
 
 
 }
@@ -640,7 +622,7 @@ function loadVolume(){
 	//Load the value from local storage into a local variable.
 	var volume = parseInt(localStorage.getItem("volume"));
 
-	console.log("Loaded", volume, "volume");
+	console.log("Loaded", volume);
 
 	//Check if the value is invalid.
 	if(isNaN(volume)){
@@ -649,6 +631,8 @@ function loadVolume(){
 		volume = 1;
 
 	}
+
+	console.log("Or...", volume);
 
 	//Return this value.
 	return volume;
@@ -663,19 +647,15 @@ function loadVolume(){
 //Resize game to browser window size.
 function resizeGame() {
 	
-	if(game.height === $(window).height || game.width === $(window).width){
-
-		console.log("No resize needed");
-		return;
-
-	}
-
 	//Get the window width and height.
 	var windowWidth = $(window).width();
-	var windowHeight = $(window).width();
+	var windowHeight = $(window).height();
 
 	//Log the new size.
 	console.log("Resizing to", windowWidth, "x", windowHeight);
+
+	//Scale the game to the new size.
+	//game.scale.setGameSize(windowWidth, windowHeight);
 
 	//Anchor the background at the center and move it to the center.
 	backgroundImage.anchor.setTo(0.5, 0.5);
@@ -696,14 +676,19 @@ function resizeGame() {
 
 	//These items depend on possibly unavailable information, and thus, may be undefined yet.
 
-	//Keep Center Point reference up to data and ensure that level stays in middle of screen.
-	if(menus.stages.game){
+	//Set the center point as long as it is defined and player is playing the game.
+	if(typeof centerPoint != "undefined" && menuStages.game){
 
-		game.centerPoint.setTo(game.width / 2, game.height / 2);
-		game.levels[game.currentLevel].updatePosition(game.centerPoint, getPaddleRunRadius(), game.levelBuffer, false);
+		centerPoint.setTo(game.width / 2, game.height / 2);
 
 	}
 
+	//Update level position as long as it is defined and player is playing the game.
+	if(typeof levels[currentLevel] != "undefined" && menuStages.game){
+
+		levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
+
+	}//*/
 
 }
 
@@ -712,10 +697,10 @@ function resizeGame() {
 */
 
 //Temporarily show fullscreen text.
-function flashText(newText){
+function showFullscreenText(){
 
 
-	fullscreenText.text = newText;
+	console.log(game.time.now, timer, game.time.now - timer);
 
 	if(game.time.now - timer > 5000){
 
@@ -725,11 +710,10 @@ function flashText(newText){
 		//After 500ms show a sliding text informing the user on how to go fullscreen.
 		game.time.events.add(500, function(){
 
-					game.world.bringToTop(fullscreenText);
 					fullscreenText.alpha = 1;	
 					fullscreenText.y = 0			
-					game.add.tween(fullscreenText).to({y: game.height / 2}, 3000, Phaser.Easing.Quadratic.Out, true);
-					game.add.tween(fullscreenText).to({alpha: 0}, 3000, Phaser.Easing.Linear.None, true);
+					game.add.tween(fullscreenText).to({y: game.height / 2}, 1500, Phaser.Easing.Linear.None, true);
+					game.add.tween(fullscreenText).to({alpha: 0}, 1500, Phaser.Easing.Linear.None, true);
 
 
 				}, this);
@@ -741,9 +725,9 @@ function flashText(newText){
 //Show pause screen text.
 function showPauseText(){
 
-	if(typeof pauseText === "undefined"){
+	//Check pause text has been initialised.
+	if(typeof pauseText == "undefined"){
 
-		console.warn("Pause Text is undefined.")
 		return;
 
 	}
@@ -757,6 +741,13 @@ function showPauseText(){
 
 //Hide pause screen text.
 function hidePauseText(){
+
+	//Check pause text has been initialised.
+	if(typeof pauseText == "undefined"){ 
+
+		return;
+
+	}
 
 	//Remove the pause game text by making it fade out slowly over 1.5s.
 	game.time.events.add(0, function(){
@@ -778,8 +769,6 @@ function pauseGame(){
 	game.paused = true;
 	showPauseText();
 
-	console.log("Game Paused");
-
 }
 
 
@@ -789,8 +778,6 @@ function unPauseGame(){
 	game.paused = false;
 	hidePauseText();
 
-	console.log("Game Unpaused");
-
 }
 
 function mouseUpEvents(pointer){
@@ -799,9 +786,11 @@ function mouseUpEvents(pointer){
 	var doubleClick = (pointer.msSinceLastClick < game.input.doubleTapRate);
 
 	//If not fullscreen, mobile and in game, resize the game.
-	if(!game.scale.isFullScreen && !player.controlMethod.mobile && menus.stages.game){
+	if(!game.scale.isFullScreen && !controlMethod.mobile && menuStages.game){
 
-		
+		//Resize the game to window.
+		resizeGame();
+
 		//Unpause in case menu was exited
 		game.paused = false;
 
@@ -813,25 +802,31 @@ function mouseUpEvents(pointer){
 
 		game.scale.stopFullScreen();
 
+		//Resize again to adjust to window again.
+		resizeGame();
+
+
 	}
-	if(doubleClick && !player.controlMethod.mobile){	//If double clicking on desktop (Don't allow on mobile, unnecessary).
+	else if(doubleClick && !controlMethod.mobile){	//If double clicking on desktop (Don't allow on mobile, unnecessary).
+
 
 		game.scale.startFullScreen(false);
+		resizeGame();
+		pauseGame();
+
 
 	}
-	if(!doubleClick && pointer.msSinceLastClick < game.input.doubleTapRate * 2){	//If double click was *almost* performed.
+	else if(!doubleClick && pointer.msSinceLastClick < game.input.doubleTapRate * 2){	//If double click was *almost* performed.
 
 		//Show user how to go fullscreen in case they wanted to.
-		flashText("Double Click to go Fullscreen");
+		showFullscreenText();
 
 	}
-	if(!doubleClick && !game.paused){
+	else if(!doubleClick && game.scale.isFullScreen){
 
-		//If mouse focus was lost on fullscreen allow unpausing via mouse click.
 		unPauseGame();
 
 	}
-	
 
 }
 
@@ -853,7 +848,7 @@ function toggleMute(){
 
 function muteAll(){
 
-//Stop game.sounds.
+//Stop sounds.
 bgMusic.pause();
 ambience.pause();
 lostSound.volume = 0;
@@ -869,7 +864,7 @@ saveVolume(0)
 
 function playAll(){
 
-//Play game.sounds.
+//Play sounds.
 bgMusic.play();
 ambience.play();
 lostSound.volume = 1;
@@ -897,14 +892,14 @@ $(document).ready(function(event){
 	$(document).keyup(function(event){
 
 		//Check if "esc" key was pressed.
-		if(event.keyCode === 27){
+		if(event.keyCode == 27){
 
 			//If game is paused.
 			if(game.sound.mute){
 
 				//Revert to live game condition.
-				menus.stages.game = true;
-				menus.stages.paused = false;
+				menuStages.game = true;
+				menuStages.paused = false;
 
 				//Unpause.
 				game.paused = false;
@@ -920,8 +915,8 @@ $(document).ready(function(event){
 				showPauseText();
 
 				//Revert to paused state.
-				menus.stages.game = false;
-				menus.stages.paused = true;
+				menuStages.game = false;
+				menuStages.paused = true;
 
 				//Pause game.
 				game.paused = true;
@@ -931,7 +926,7 @@ $(document).ready(function(event){
 
 		}
 
-		if(event.keyCode === 77){
+		if(event.keyCode == 77){
 
 			toggleMute();
 
@@ -939,30 +934,56 @@ $(document).ready(function(event){
 
 	});
 
+	//Pause and resize game when window is resized.
+	$(window).on('resize', function(event){
+
+		if(!game.scale.isFullScreen){
+			
+			pauseGame();
+
+		}
+
+		resizeGame();	
+
+	});
+
 	//Pause game when mouse leaves window.
 	$(document).mouseleave(function(){
 
-		if(menus.stages.game){
+		if(menuStages.game){
 			
 			pauseGame();
 
 		}
 
 	});
-	
+
+	//Unpause game when mouse enters window.
+	$(document).mouseenter(function(){
+
+		if(menuStages.game){
+
+			unPauseGame();
+
+		}
+
+	});
+
 });
 
 
 function hitBlock(body1, body2){
 
+	console.log("Block Hit");
+
 	//Make block not static so it can now move.
 	body2.static = false;
 
 	//Get the block that has been hit.
-	var blockHit = game.levels[game.currentLevel].getBlock(body2.id);
+	var blockHit = levels[currentLevel].getBlock(body2.id);
 
-	//If undefined, it has already been hit and body hasn't been disabled yet.
-	if(typeof blockHit === "undefined"){
+	//If undefined, it has already been hit.
+	if(typeof blockHit == "undefined"){
 
 		return;
 
@@ -979,12 +1000,12 @@ function hitBlock(body1, body2){
 		body2.dynamic = true;
 		body2.sprite.visible = false;
 
-		console.log("Block", blockHit.getColor(), "hit");
+		console.log(blockHit.getColor());
 		
 		body2.sprite = null;
 
 		//.
-		if(blockHit.getColor() === "life"){
+		if(blockHit.getColor() == "life"){
 
 			//Spawn a paddle powerup!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'lifeblock');
@@ -992,7 +1013,7 @@ function hitBlock(body1, body2){
 			blockHit.markPowerup("life");
 
 		}
-		else if(blockHit.getColor() === "paddle"){	//7.5% chance to spawn a life.
+		else if(blockHit.getColor() == "paddle"){	//7.5% chance to spawn a life.
 
 			//Spawn an extra life powerup!
 			body2.sprite = game.add.sprite(body2.x, body2.y, 'paddleblock');
@@ -1009,20 +1030,15 @@ function hitBlock(body1, body2){
 		}
 
 		body2.sprite.visible = true;
-		body2.sprite.width = game.blockSize;
-		body2.sprite.height = game.blockSize;
+		body2.sprite.width = blockSize;
+		body2.sprite.height = blockSize;
 
 		//All powerups have a constant tween.
-		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 500, Phaser.Easing.Linear.None, true, 0, 10).loop(false));
+		blockHit.storeTween(game.add.tween(body2.sprite).to({alpha: 0.25}, 500, Phaser.Easing.Linear.None, true, 0, 100, true));
 
-		//When the tween has completed, remove the block.
-		blockHit.getTween().onComplete.add(function(){
+		//Log that a powerup has spawned.
+		console.log("Powerup Hit!");
 
-			body2.sprite.visible = false;
-			blockHit.destroy();
-
-		})
-		
 	}
 	else{	//If not a powerup, create a standard fly-off block.
 
@@ -1038,8 +1054,7 @@ function hitBlock(body1, body2){
 	
 	//Set block to fly off opposite ball hit point.
 	var blockVelocity = new Phaser.Point(ball.body.velocity.x + game.rnd.integerInRange(-100, 100), ball.body.velocity.y + game.rnd.integerInRange(-100, 100));
-	var ballVelocity = new Phaser.Point(ball.body.velocity.x, ball.body.velocity.y);
-	blockVelocity.setMagnitude(ballVelocity.getMagnitude() * -1);
+	blockVelocity.setMagnitude(ballVector.getMagnitude() * -1);
 
 	//Translate to body corresponding to block.
 	body2.velocity.x = blockVelocity.x;
@@ -1049,13 +1064,13 @@ function hitBlock(body1, body2){
 	body2.angularVelocity = game.rnd.frac(-Math.PI, Math.PI);
 
 	//Play a pop sound effect when colliding with a block.
-	game.sounds.pop.play();
+	sounds.pop.play();
 
 	//Inform level object that a block has been detroyed.
-	game.levels[game.currentLevel].blockHit();
+	levels[currentLevel].blockHit();
 
 	//Update HUD to new blocks remaining number.
-	hud.blocksLeft.text = "Blocks Left: " + game.levels[game.currentLevel].numBlocksLeft();
+	hud.blocksLeft.text = levels[currentLevel].numBlocksLeft();
 
 }
 
@@ -1063,85 +1078,56 @@ function hitBlock(body1, body2){
 function hitPaddle(body1, body2){
 
 	//Play a sound when paddle is hit.
-	game.sounds.pop.play();
+	sounds.pop.play();
 
 }
 
 function collectPowerup(body1, body2){
 
-	//Check to see if this block has already been collected(is still colliding with paddle).
-	if(body1.id === game.lastBlockHit){
-
-		//If so, no further action needed.
-		return;
-
-	}
-	else{
-
-		//Otherwise, this is a new block, remember this new ID.
-		game.lastBlockHit = body1.id;
-
-	}
-
 	//Log that powerup has been collected.
 	console.log("Powerup Collected!");
 
 	//Retrieve the block that has been collected using its ID.
-	var blockHit = game.levels[game.currentLevel].getBlock(body1.id);
+	var blockHit = levels[currentLevel].getBlock(body1.id);
 
 	//Remove the block body from all of it's collision groups and remove it's masks.
 	body1.clearCollision(true, true);	
 	
-	//Make sure any blocks that are undefined are not collected, these have usually already been collected.
-	if(typeof blockHit === "undefined"){
+	//Make sure any blocks that are undefined are not collected.
+	if(typeof blockHit == "undefined"){
 
 		return;
 
 	}
 
-	var powerupSuccess = false;
-
 	//Check which type of powerup this block is.
-	if(blockHit.getPowerup() === "paddle" && !paddle.secondPaddle.active){
+	if(blockHit.getPowerup() == "paddle" && !secondPaddleActive){
 
 		//Set paddle as active.
-		paddle.secondPaddle.active = true;
-		paddle.secondPaddle.visible = true;
-		paddle.secondPaddle.alpha = 0;
+		secondPaddleActive = true;
+		secondPaddle.visible = true;
+		secondPaddle.alpha = 0;
 
 		//Fade paddle in and stay for 10 seconds.
-		game.add.tween(paddle.secondPaddle.body.sprite).to({alpha: 1}, 1000, Phaser.Easing.Linear.None, true);
+		game.add.tween(secondPaddle.body.sprite).to({alpha: 1}, 1000, Phaser.Easing.Linear.None, true);
 		game.time.events.add(Phaser.Timer.SECOND * 10, removePaddlePowerUp, this);
-
-		powerupSuccess = true;
 			
 	}
-	else if(blockHit.getPowerup() === "life"){
+	else if(blockHit.getPowerup() == "life"){
 
-		//Increment player.lives and update hud.
-		player.lives++;
-		hud.lives.text = "Lives: " + player.lives;
+		//Increment lives and update hud.
+		lives++;
+		hud.lives.text = lives;
 
 	}
-	else if(blockHit.getPowerup() === "ball" && !ball.superBall){
+	else if(blockHit.getPowerup() == "ball" && ballSize < 2){
 
 		game.add.tween(ball.scale).to({x: 2, y: 2}, 500, Phaser.Easing.Linear.None, true);
-		ball.ballTrail.setScale(2, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
+		ballTrail.setScale(2, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
 
 		game.time.events.add(Phaser.Timer.SECOND * 10, removeBallPowerUp, this);
 
-		ball.superBall = true;
-
-		powerupSuccess = true;
-
 	}
-	else if(!powerupSuccess){
-
-		game.sounds.antiPower.play();
-
-	}
-
-	
 
 	blockHit.kinematic = true;
 
@@ -1151,44 +1137,29 @@ function collectPowerup(body1, body2){
 	//Remove permanent tween from powerup block.
 	game.tweens.remove(blockHit.getTween());
 
-	if(powerupSuccess){
+	//Create temporary tween to make smooth transition out.
+	game.add.tween(body1.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
+	game.add.tween(body1.sprite.scale).to({x: ballSize * 2, y: ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
 
-			//Play powerup sound as collected.
-			game.sounds.power.play();
-			//Create temporary tween to make smooth transition out.
-			game.add.tween(body1.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
-			game.add.tween(body1.sprite.scale).to({x: ball.ballSize * 2, y: ball.ballSize * 2}, 500, Phaser.Easing.Linear.None, true);
-
-	}
-	else{
-
-		//Create temporary tween to make smooth transition out.
-		game.add.tween(body1.sprite).to({alpha: 0}, 500, Phaser.Easing.Linear.None, true);
-		game.add.tween(body1.sprite.scale).to({x: 0, y: 0}, 500, Phaser.Easing.Linear.None, true);
-
-
-	}
-	
 	//Deactivate block from level.
-	game.levels[game.currentLevel].deactivateBlock(body1.id);
+	levels[currentLevel].deactivateBlock(body1.id);
 
-	
+	//Play powerup sound as collected.
+	sounds.power.play();
 
 }
 
 function removePaddlePowerUp(){
 
 	//Remove the Second Paddle powerup if active.
-	if(paddle.secondPaddle.active){
+	if(secondPaddleActive){
 	
 		//Set paddle to inactive.
-		paddle.secondPaddle.active = false;
-		paddle.secondPaddle.alpha = 1;
+		secondPaddleActive = false;
+		secondPaddle.alpha = 1;
 
 		//Make paddle fade out.
-		game.add.tween(paddle.secondPaddle.body.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
-
-		game.sounds.antiPower.play();
+		game.add.tween(secondPaddle.body.sprite).to({alpha: 0}, 1000, Phaser.Easing.Linear.None, true);
 
 	}
 }
@@ -1196,15 +1167,11 @@ function removePaddlePowerUp(){
 function removeBallPowerUp(){
 
 	//Remove enlarged Ball powerup if active.
-	if(ball.scale.x === 2){
+	if(ball.scale.x == 2){
 
 		//Put scales back to defaults gradually.
 		game.add.tween(ball.scale).to({x: 1, y: 1}, 500, Phaser.Easing.Linear.None, true);
-		ball.ballTrail.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
-
-		ball.superBall = false;
-
-		game.sounds.antiPower.play();
+		ballTrail.setScale(1, 0, 1, 0, 2000, Phaser.Easing.Quintic.Out, false);
 
 	}
 
@@ -1221,8 +1188,8 @@ function checkBallOutOfBounds(){
 		&&
 
 		//Ball checking is not valid for end game screen or level finish screens.
-		!menus.stages.endGame &&
-		!menus.stages.levelFinish
+		!menuStages.endGame &&
+		!menuStages.levelFinish
 
 		){
 
@@ -1230,17 +1197,17 @@ function checkBallOutOfBounds(){
 		lostSound.play();
 
 		//Move to fail menu.
-		menus.stages.game = false;
-		menus.stages.fail = true;
+		menuStages.game = false;
+		menuStages.fail = true;
 
 		//Disable level and enable fail screen.
-		game.levels[game.currentLevel].setVisibility(false);
-		menus.failScreen.setVisibility(true);
+		levels[currentLevel].setVisibility(false);
+		failScreen.setVisibility(true);
 
-		//If out of player.lives, disable retry button.		
-		if(player.lives <= 0){
+		//If out of lives, disable retry button.		
+		if(lives <= 0){
 
-			menus.failScreen.disableButton("retry");
+			failScreen.disableButton("retry");
 
 		}
 
@@ -1269,7 +1236,7 @@ function outOfBounds(sprite){
 function buttonSelect(button){
 
 	//Play button select sound.
-	game.sounds.beep.play();
+	sounds.beep.play();
 
 	//Select event based on name of button pressed.
 	switch(button.name){
@@ -1289,26 +1256,25 @@ function buttonSelect(button){
 			hud.lives.visible = true;
 
 			//Move to game stage.
-			menus.stages.main = false;
-			menus.stages.tutorial = false;
-			menus.stages.game = true;
+			menuStages.main = false;
+			menuStages.tutorial = false;
+			menuStages.game = true;
 
 			//Unpause game if it is.
 			game.paused = false;
 
 			//Disable main menu.
-			menus.mainMenu.setVisibility(false);
+			mainMenu.setVisibility(false);
 
 			//Enable level and specialised objects.
-			//game.levels[game.currentLevel].setVisibility(true, true);
+			//levels[currentLevel].setVisibility(true, true);
 			paddle.visible = true;
 			ball.visible = true;
 
-
-			initCollisions();
-
 			//Resize game so player can see everything.
 			resizeGame();
+
+			initCollisions();
 
 
 		break;
@@ -1316,32 +1282,32 @@ function buttonSelect(button){
 		case "options":
 
 			//Move to options state.
-			menus.stages.main = false;
-			menus.stages.options = true;
-			menus.stages.game = false;
+			menuStages.main = false;
+			menuStages.options = true;
+			menuStages.game = false;
 
 			//Disable main menu and enable options.
-			menus.mainMenu.setVisibility(false);
-			menus.optionsMenu.setVisibility(true);
+			mainMenu.setVisibility(false);
+			optionsMenu.setVisibility(true);
 
 		break;
 
 		case "tutorial":
 
 			//Move to tutorial stage.
-			menus.stages.main = false;
-			menus.stages.tutorial = true;
+			menuStages.main = false;
+			menuStages.tutorial = true;
 
 			//Setup buffer for text.
 			var widthBuffer = game.width * 0.5;
 			var heightBuffer = game.height * 0.5;
 
 			//Add text from text file to tutorial menu.
-			menus.tutorialScreen.addText(tutorialText, game.width * 0.1, game.height / 2, game.width - (game.width * 0.2), game.height - (game.height * 0.2));
+			tutorialScreen.addText(tutorialText, game.width * 0.15, game.height * 0.15, game.width - (game.width * 0.2), game.height - (game.height * 0.2));
 
 			//Make tutorial menu visible.			
-			menus.mainMenu.setVisibility(false);
-			menus.tutorialScreen.setVisibility(true);
+			mainMenu.setVisibility(false);
+			tutorialScreen.setVisibility(true);
 
 		break;
 
@@ -1350,7 +1316,7 @@ function buttonSelect(button){
 			toggleMute();
 
 			//Show options menu again.
-			menus.optionsMenu.setVisibility(true);
+			optionsMenu.setVisibility(true);
 
 
 		break;
@@ -1361,51 +1327,51 @@ function buttonSelect(button){
 			clearSave();
 
 			//Make button grey out to show action has been performed.
-			menus.optionsMenu.disableButton("clearsaves");
+			optionsMenu.disableButton("clearsaves");
 
 			//Change button text to confirm with user.
-			menus.optionsMenu.changeText("clearsaves", "Deleted");
+			optionsMenu.changeText("clearsaves", "Deleted");
 
-			//Revert to default level and player.lives.
-			game.currentLevel = 0;
-			player.lives = 3;
+			//Revert to default level and lives.
+			currentLevel = 0;
+			lives = 3;
 
 		break;
 
 		case "credits":
 
-			menus.optionsMenu.setVisibility(false);
-			menus.creditsScreen.setVisibility(true);
+			optionsMenu.setVisibility(false);
+			creditsScreen.setVisibility(true);
 
-			menus.stages.options = false;
-			menus.stages.credits = true;
+			menuStages.options = false;
+			menuStages.credits = true;
 
 		break;
 
 		case "back":
 
 			//Credits menu has a special back button.
-			if(!menus.stages.credits){
+			if(!menuStages.credits){
 
 				//Main menu state.
-				menus.stages.main = true;
-				menus.stages.game = false;
-				menus.stages.options = false;
+				menuStages.main = true;
+				menuStages.game = false;
+				menuStages.options = false;
 
 				//Show main menu.
-				menus.optionsMenu.setVisibility(false);
-				menus.tutorialScreen.setVisibility(false);
-				menus.creditsScreen.setVisibility(false);
-				menus.mainMenu.setVisibility(true);
+				optionsMenu.setVisibility(false);
+				tutorialScreen.setVisibility(false);
+				creditsScreen.setVisibility(false);
+				mainMenu.setVisibility(true);
 
 			}
 			else{
 
-				menus.stages.credits = false;
-				menus.stages.options = true;
+				menuStages.credits = false;
+				menuStages.options = true;
 
-				menus.creditsScreen.setVisibility(false);
-				menus.optionsMenu.setVisibility(true);
+				creditsScreen.setVisibility(false);
+				optionsMenu.setVisibility(true);
 
 			}
 
@@ -1415,20 +1381,20 @@ function buttonSelect(button){
 		case "nextlevel":
 
 			//Game state.
-			menus.stages.levelFinish = false;
-			menus.stages.game = true;
+			menuStages.levelFinish = false;
+			menuStages.game = true;
 
-			//Remove between game.levels menu.
-			menus.nextLevelMenu.setVisibility(false);
+			//Remove between levels menu.
+			nextLevelMenu.setVisibility(false);
 
 			//Increment level number and setup new level.
-			game.currentLevel++;
-			game.levels[game.currentLevel].setVisibility(true, true);
-			game.levels[game.currentLevel].updatePosition(game.centerPoint, getPaddleRunRadius(), game.levelBuffer, false);
+			currentLevel++;
+			levels[currentLevel].setVisibility(true, true);
+			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
 			//Update relevent hud items.
-			hud.level.text = game.currentLevel;
-			hud.levelName.text = game.levels[game.currentLevel].getName();
+			hud.level.text = currentLevel;
+			hud.levelName.text = levels[currentLevel].getName();
 
 			//Reset ball to corner.
 			resetBall();
@@ -1441,25 +1407,28 @@ function buttonSelect(button){
 		case "retry":
 
 			//Game state.
-			menus.stages.fail = false;
-			menus.stages.game = true;
+			menuStages.fail = false;
+			menuStages.game = true;
 
 			//Remove fail screen, bring level back.
-			menus.failScreen.setVisibility(false);
-			game.levels[game.currentLevel].setVisibility(true, false);
-			game.levels[game.currentLevel].updatePosition(game.centerPoint, getPaddleRunRadius(), game.levelBuffer, false);
+			failScreen.setVisibility(false);
+			levels[currentLevel].setVisibility(true, false);
+			levels[currentLevel].updatePosition(centerPoint, paddleRunRadius, levelBuffer, false);
 
 			//Reset ball again.
 			resetBall();
 
-			//Decrement player.lives.
-			player.lives--;
+			//Decrement lives.
+			lives--;
 
 			//Update hud text.
-			hud.lives.text = "Lives: " + player.lives;
+			hud.lives.text = lives;
 
 			//Unpause game.
 			game.paused = false;
+
+			removePowerUp();
+
 
 		break;
 
@@ -1480,16 +1449,16 @@ function buttonSelect(button){
 function checkLevelCompletion(){
 
 	//Check for whether the current level is finished.
-	if(game.levels[game.currentLevel].numBlocksLeft() <= 0){
+	if(levels[currentLevel].numBlocksLeft() <= 0){
 
 		game.paused = true;
-		menus.stages.game = false;
+		menuStages.game = false;
 
-		//If there are no game.levels left, show end game screen, otherwise show level finish menu.
-		if(typeof game.levels[game.currentLevel + 1] === "undefined"){
+		//If there are no levels left, show end game screen, otherwise show level finish menu.
+		if(typeof levels[currentLevel + 1] == "undefined"){
 
-			menus.stages.endGame = true;
-			menus.endGameScreen.setVisibility(true);
+			menuStages.endGame = true;
+			endGameScreen.setVisibility(true);
 
 		}
 		else{
@@ -1497,10 +1466,10 @@ function checkLevelCompletion(){
 			//Save the game so user can continue later.
 			saveGame();
 
-			//Level finish state and show between game.levels menu.
-			menus.stages.game = false;
-			menus.stages.levelFinish = true;
-			menus.nextLevelMenu.setVisibility(true);
+			//Level finish state and show between levels menu.
+			menuStages.game = false;
+			menuStages.levelFinish = true;
+			nextLevelMenu.setVisibility(true);
 
 			//Choose console based on browser.
 			if (typeof console._commandLineAPI !== 'undefined') {
@@ -1526,58 +1495,89 @@ function checkLevelCompletion(){
 
 }
 
+function leapGestures(frame){
+
+	frame.pointables.forEach(function(pointable){
+
+		var position = pointable.stabilizedTipPosition;
+		var normalised = frame.interactionBox.normalizePoint(position);
+
+		mousePoint.set(game.width * normalised[0], game.height * (1 - normalised[1]));
+
+		frame.gestures.forEach(function(gesture){
+
+			if(frame.valid && frame.gestures.length > 0){
+
+				if(gesture.type == "screenTap"){
+
+					
+
+				}
+
+			}
+
+		});
+
+		
+
+
+	});
+
+}
+
 
 /*	MOVEMENT
 
 */
 
-function paddleMove(paddleBody, angle){
+function paddleMove(paddleBody, lineAngle){
 
 	
-	var x = (Math.sin(angle) * getPaddleRunRadius());
+	var x = (Math.sin(lineAngle) * paddleRunRadius);
 
 	//Some trigonometry to work out position from angle and know side (radius of circle).
 	paddleBody.body.x = (x + (game.width / 2));
-	paddleBody.body.y = (x / Math.tan(-angle) + (game.height / 2));
+	paddleBody.body.y = (x / Math.tan(-lineAngle) + (game.height / 2));
 
-	//Case of divide by zero when angle === 0, so deal with special case.
-	if(angle === 0){
+	//Case of divide by zero when angle == 0, so deal with special case.
+	if(lineAngle == 0){
 
 		paddleBody.body.x = game.width / 2;
-		paddleBody.body.y = (game.height / 2) - getPaddleRunRadius();
+		paddleBody.body.y = (game.height / 2) - paddleRunRadius;
 
 
 	}
 
 	//If using Leap Motion Controller and the Left Hand is visible.
-	if(player.controlMethod.leapMotion && typeof player.leftHand != "undefined"){
+	if(controlMethod.leapMotion && typeof leftHand != "undefined"){
 
 		//Rotate paddle according to the rotation of the Left Hand mapped to a 180 degree (-PI/2 - PI/2) range.
-		paddleBody.body.rotation = player.leftHand.roll().map(-1, 1, -Math.PI / 2, Math.PI / 2);
+		paddleBody.body.rotation = leftHand.roll().map(-1, 1, -Math.PI / 2, Math.PI / 2);
 
 	}
 	else{
 
 		//Rotate paddle so it always faces center.
-		paddleBody.body.rotation = angle;
+		paddleBody.body.rotation = lineAngle;
+
 
 	}
 
 }
 
-function pcControls(angle){
+function pcControls(lineAngle){
 	
 	//If using Leap Motion and Left hand is visible just move the paddle, don't rotate here.
-	if(player.controlMethod.leapMotion && typeof player.leftHand != "undefined"){
+	if(controlMethod.leapMotion && typeof leftHand != "undefined"){
 
 		//Move paddle along circle.
-		paddleMove(paddle, angle);
+		paddleMove(paddle, lineAngle);
 
 
 		//Move second paddle to opposite point if active.
-		if(paddle.secondPaddle.active){
+		if(secondPaddleActive){
 
-			paddleMove(paddle.secondPaddle, angle - Math.PI);
+			paddleMove(secondPaddle, lineAngle - Math.PI);
 
 		}
 
@@ -1588,20 +1588,20 @@ function pcControls(angle){
 		if( game.input.activePointer.isDown ){
 				
 				//Rotate paddle to face mouse pointer.
-				paddle.body.rotation = game.physics.arcade.angleBetween(paddle.position, player.mousePoint) - (Math.PI / 2);
-				paddle.secondPaddle.body.rotation = game.physics.arcade.angleBetween(paddle.secondPaddle.position, player.mousePoint) - (Math.PI / 2);
+				paddle.body.rotation = game.physics.arcade.angleBetween(paddle.position, mousePoint) - (Math.PI / 2);
+				secondPaddle.body.rotation = game.physics.arcade.angleBetween(secondPaddle.position, mousePoint) - (Math.PI / 2);
 
 		}
 		else{
 
 			//Move paddle along circle.
-			paddleMove(paddle, angle);
+			paddleMove(paddle, lineAngle);
 
 
 			//Move second paddle to opposite point if active.
-			if(paddle.secondPaddle.active){
+			if(secondPaddleActive){
 
-				paddleMove(paddle.secondPaddle, angle - Math.PI);
+				paddleMove(secondPaddle, lineAngle - Math.PI);
 
 			}
 
@@ -1611,7 +1611,7 @@ function pcControls(angle){
 
 }
 
-function touchControls(angle){
+function touchControls(lineAngle){
 
 	//Setup finger points.
 	var firstPoint = new Phaser.Point(game.input.pointer1.x, game.input.pointer1.y);
@@ -1621,18 +1621,18 @@ function touchControls(angle){
 	if(game.input.pointer1.isDown && game.input.pointer2.isDown){
 
 		paddle.body.rotation = game.physics.arcade.angleBetween(paddle.position, secondPoint) + (Math.PI / 2);
-		paddle.secondPaddle.body.rotation = game.physics.arcade.angleBetween(paddle.secondPaddle.position, player.mousePoint) - (Math.PI / 2);
+		secondPaddle.body.rotation = game.physics.arcade.angleBetween(secondPaddle.position, mousePoint) - (Math.PI / 2);
 
 	}
 	else if(game.input.pointer1.isDown && game.input.pointer2.isUp){ //If only one point held.
 
 		//Move paddle along circle nearest to point.
-		paddleMove(paddle, angle)
+		paddleMove(paddle, lineAngle)
 
 		//Move second paddle to opposite side if active.
-		if(paddle.secondPaddle.active){
+		if(secondPaddleActive){
 
-			paddleMove(paddle.secondPaddle, angle - Math.PI);
+			paddleMove(secondPaddle, lineAngle - Math.PI);
 
 		}
 
@@ -1660,30 +1660,30 @@ var adjusted = false;
 function setReferenceParameters(){
 
 	//Center of game area.
-	game.centerPoint.set(game.width / 2, game.height / 2);
+	centerPoint.set(game.width / 2, game.height / 2);
 
-	if(!player.controlMethod.leapMotion){
+	if(!controlMethod.leapMotion){
 		
 		//Collect mouse co-ordinates into a point.
-		player.mousePoint.set(game.input.x, game.input.y);
+		mousePoint.set(game.input.x, game.input.y);
 
 	}
 
 	//Get angle for incremental paddle movement.
-	if(!player.controlMethod.leapMotion){
+	if(!controlMethod.leapMotion){
 
 		//Get the current angle of the mouse.
-		var mouseAngle = game.physics.arcade.angleBetween(game.centerPoint, player.mousePoint) + (Math.PI / 2);
+		var mouseAngle = game.physics.arcade.angleBetween(centerPoint, mousePoint) + (Math.PI / 2);
 
 		var adjusted = false;
 
 		//Check if both angles are on either side of the zero boundary (Here is is (3 PI / 2) to -(PI / 2)).
-		if(mouseAngle < 0 && paddle.lineAngle > Math.PI || paddle.lineAngle < 0 && mouseAngle > Math.PI){
+		if(mouseAngle < 0 && lineAngle > Math.PI || lineAngle < 0 && mouseAngle > Math.PI){
 
 			//Check which angle is in which boundary, offset the one in negative rotation round a full turn to positive rotation.
-			if(mouseAngle > paddle.lineAngle){
+			if(mouseAngle > lineAngle){
 
-				paddle.lineAngle += 2 * Math.PI;
+				lineAngle += 2 * Math.PI;
 
 			}else{
 
@@ -1697,29 +1697,29 @@ function setReferenceParameters(){
 		}
 
 		//Get a portion of the difference of angle between the paddle and the mouse.
-		var dTheta = (mouseAngle - paddle.lineAngle) / paddle.paddleFollowLag;
+		var dTheta = (mouseAngle - lineAngle) / paddleFollowLag;
 
 		//Check if an offset was required and if that adjustment was to the paddle angle 
 		//(no need for mouse angle as it will be re adjusted next time).
-		if(adjusted && (mouseAngle > paddle.lineAngle)){
+		if(adjusted && (mouseAngle > lineAngle)){
 
-			paddle.lineAngle -= 2 * Math.PI;
+			lineAngle -= 2 * Math.PI;
 
 		}
 
 		//Add this difference to the paddle angle.
-		paddle.lineAngle += dTheta;
+		lineAngle += dTheta;
 
 
 	}
 	else{
 
-		console.log(player.rightHand);
+		console.log(rightHand);
 
-		if(typeof player.rightHand != "undefined"){
+		if(typeof rightHand != "undefined"){
 
-			paddle.lineAngle = player.rightHand.roll().map(-1, 1, 2 * Math.PI, 0);
-			console.log(paddle.lineAngle);
+			lineAngle = rightHand.roll().map(-1, 1, 2 * Math.PI, 0);
+			console.log(lineAngle);
 
 		}
 
@@ -1729,12 +1729,11 @@ function setReferenceParameters(){
 
 function updateBallVelocity(){
 
-	var ballVector = new Phaser.Point();
 	//Get the balls velocity.
 	ballVector.set(ball.body.velocity.x, ball.body.velocity.y);
 
 	//If vector is zero magnitude, offset to prevent error causing ball to stop.
-	if(ballVector.getMagnitude() === 0){
+	if(ballVector.getMagnitude() == 0){
 
 		ballVector.set(0.01, 0.01);
 
@@ -1742,7 +1741,7 @@ function updateBallVelocity(){
 	}
 
 	//If the balls speed is less than specified value.
-	if(ballVector.getMagnitude() < ball.ballSpeed || ballVector.getMagnitude() === 0){
+	if(ballVector.getMagnitude() < ballSpeed || ballVector.getMagnitude() == 0){
 
 		ball.body.damping = 0;
 
@@ -1756,7 +1755,7 @@ function updateBallVelocity(){
 	}
 
 	//If the bal is going too fast, make it decelerate slowly.
-	if(ballVector.getMagnitude() > ball.ballSpeed){
+	if(ballVector.getMagnitude() > ballSpeed){
 
 		ball.body.damping = 0.1;
 
@@ -1770,7 +1769,7 @@ function ballWander(radius){
 	ball.kinematic = true;
 
 	//Radii of both circles ('a' is outer), ('b' is inner).
-	var a = radius || getPaddleRunRadius();
+	var a = radius || paddleRunRadius;
 	var b = a / 20;
 
 	//Phase each circle a and b.
@@ -1826,12 +1825,10 @@ var Block = (
 
 			//Choose the sprite for this block.
 			this.sprite = game.add.sprite(this.x, this.y, this.color.concat("block"));
-			//All blocks start invisible until called onto screen from level.
-			this.sprite.visible = false;
 
 			//Adjust sprite width to default size.
-			this.sprite.width = game.blockSize;
-			this.sprite.height = game.blockSize;
+			this.sprite.width = blockSize;
+			this.sprite.height = blockSize;
 
 			//Set width of block to sprite width.
 			this.width = this.sprite.width;
@@ -1844,7 +1841,7 @@ var Block = (
 			this.blockAlive = true;
 
 			//If block is a ball powerup, it has an animation as well as being a powerup.
-			if(this.color === "ball"){
+			if(this.color == "ball"){
 				
 				//This block has an animation.
 				this.animation = this.sprite.animations.add('glisten');
@@ -1856,7 +1853,7 @@ var Block = (
 			}
 
 			//Powerup "Colors".
-			if(color === "life" || color === "paddle" || color === "ball"){
+			if(color == "life" || color == "paddle" || color == "ball"){
 				
 				//Block is a powerup.
 				this.powerup = true;
@@ -1894,9 +1891,9 @@ var Block = (
 			sprite.physicsBodyType = Phaser.Physics.P2JS;
 
 			//Add body to block collision group and allow collisions with appropriate groups.
-			sprite.body.setCollisionGroup(game.collisionGroups.blockCollisionGroup);
-			sprite.body.collides(game.collisionGroups.ballCollisionGroup);
-			sprite.body.collides(game.collisionGroups.paddleCollisionGroup, collectPowerup, this);
+			sprite.body.setCollisionGroup(blockCollisionGroup);
+			sprite.body.collides(ballCollisionGroup);
+			sprite.body.collides(paddleCollisionGroup, collectPowerup, this);
 
 
 
@@ -2093,13 +2090,13 @@ function BlockLine(startPos, direction, numOfBlocks, color){
 	this.startPos=  startPos;
 
 	//Offset start position by block size as this is a cartesian coordinate.
-	this.startPos.x *= game.blockSize;
-	this.startPos.y *= game.blockSize;
+	this.startPos.x *= blockSize;
+	this.startPos.y *= blockSize;
 
 	var differX = false;
 	
 
-	if(direction.toLowerCase().indexOf("x") >= 0){
+	if(direction.toLowerCase().includes("x")){
 
 		differX = true;
 
@@ -2112,7 +2109,7 @@ function BlockLine(startPos, direction, numOfBlocks, color){
 
 	}
 
-	this.blocks = [];
+	this.blocks = new Array();
 
 	for(var i = 0; i < this.numOfBlocks; i++){
 
@@ -2166,10 +2163,10 @@ var Level = (
 		function Level(name){
 
 			//Array to store blocks.
-			this.blocks = [];
+			this.blocks = new Array();
 			
 			//Array to store block's positions.
-			this.blockPositions = [];
+			this.blockPositions = new Array();
 
 			//Level name.
 			this.name = name;
@@ -2207,8 +2204,6 @@ var Level = (
 			//Work out length of the side of the level (square so same in x & y).
 			var sideLength = (Math.sin(Math.PI / 4) * (radius * 2)) - buffer;
 
-			console.log(sideLength);
-
 			//Work out zero position from centre of screen so level is centered.
 			this.zeroPos.x = center.x - (sideLength / 2);
 			this.zeroPos.y = center.y - (sideLength / 2);
@@ -2238,7 +2233,7 @@ var Level = (
 				if(!blockObj.isAbsolute()){
 
 					//Push block onto coordinate system.
-					this.blockPositions.push({ x: blockObj.getPos().x * game.blockSize, y: blockObj.getPos().y * game.blockSize });
+					this.blockPositions.push({ x: blockObj.getPos().x * blockSize, y: blockObj.getPos().y * blockSize });
 
 				}
 				else{
@@ -2310,7 +2305,7 @@ var Level = (
 			for(var i = 0; i < this.blocks.length; i++){
 
 				//Check id matches a block body.
-				if(this.blocks[i].getBody().id === id){
+				if(this.blocks[i].getBody().id == id){
 
 					//Return the matched block and stop iterating.
 					return this.blocks[i];
@@ -2327,7 +2322,7 @@ var Level = (
 			var allBlocks = false;
 
 			//Check if id says all blocks.
-			if(id === "all"){
+			if(id == "all"){
 
 				//If so, set all blocks to true.
 				id = null;
@@ -2339,7 +2334,7 @@ var Level = (
 			for(var i = 0; i < this.blocks.length; i++){
 
 				//Check if all blocks are to be hidden or a specific id matches.
-				if(allBlocks === true || this.blocks[i].getBody().id === id){
+				if(allBlocks == true || this.blocks[i].getBody().id == id){
 
 					//Set matching block(s) to dormant state.
 					this.blocks[i].setDormant();
@@ -2424,8 +2419,8 @@ var Level = (
 			//Check if block position is outside of local bounds.
 			if(
 
-				(blocks[index].getPos().x > (zeroPos.x + size + game.blockSize)) || 
-				(blocks[index].getPos().y > (zeroPos.y + size + game.blockSize))
+				(blocks[index].getPos().x > (zeroPos.x + size + blockSize)) || 
+				(blocks[index].getPos().y > (zeroPos.y + size + blockSize))
 
 				){
 
@@ -2542,11 +2537,8 @@ Button.prototype.deactivate = function(){
 Button.prototype.setPos = function(x, y){
 
 	//Set the position of the button accounting for the offset.
-	this.button.x = x - 100;
-	this.button.y = y;
-
-	this.text.x = x - 100;
-	this.text.y = y;
+	this.button.offsetX = x - 100;
+	this.button.offsetY = y;
 
 }
 
@@ -2580,23 +2572,8 @@ function Menu(title){
 	this.title.anchor.setTo(0.5, 0.5);
 
 	//Arrays for storing buttons and text strings.
-	this.buttons = [];
-	this.texts = [];
-
-}
-
-Menu.prototype.moveTitle = function(x, y){
-
-	this.title.x = x;
-	this.title.y = y;
-
-}
-
-Menu.prototype.moveButton = function(x, y, buttonNum){
-
-	buttonNum = buttonNum || 0;
-
-	this.buttons[buttonNum].setPos(x, y);
+	this.buttons = new Array();
+	this.texts = new Array();
 
 }
 
@@ -2617,7 +2594,7 @@ Menu.prototype.disableButton = function(name){
 	for(var i = 0; i < this.buttons.length; i++){
 
 		//Match the button using its name.
-		if(this.buttons[i].button.name === name){
+		if(this.buttons[i].button.name == name){
 
 			//Deactivate any matched buttons.
 			this.buttons[i].deactivate();
@@ -2653,7 +2630,7 @@ Menu.prototype.setVisibility = function(visibility){
 Menu.prototype.addText = function(text, x, y, dx, dy){
 
 	//Create a new text string and set its bounds according to parameters.
-	var newText = game.add.text(0, 0, text, { font: "16px Courier New", fill: "#fff", align: "center", boundsAlignH: "center", boundsAlignV: "center"});
+	var newText = game.add.text(0, 0, text, { font: "20px Courier New", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle"});
 	newText.setTextBounds(x, y, dx, dy);
 
 	//Add this text to the array.
@@ -2667,7 +2644,7 @@ Menu.prototype.changeText = function(buttonName, newText){
 	for(var i = 0; i < this.buttons.length; i++){
 
 		//Match the button via its name.
-		if(this.buttons[i].getName() === buttonName){
+		if(this.buttons[i].getName() == buttonName){
 
 			//Replace the text string on the button with a new text string.
 			this.buttons[i].setText(newText);
