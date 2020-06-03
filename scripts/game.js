@@ -1,7 +1,4 @@
-
-window.devicePixelRatio = window.devicePixelRatio || (window.screen.deviceXDPI / window.screen.logicalXDPI);
-
-var game = new Phaser.Game(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio, Phaser.CANVAS, 'game-space', null, false, true);
+var game = new Phaser.Game(window.innerWidth, window.innerHeight, Phaser.AUTO, 'game-space', null, false, true);
 
 game.state.add('boot', bootState);
 game.state.add('play', playState);
